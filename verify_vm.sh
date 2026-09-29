@@ -71,15 +71,26 @@ run_test "List images" cmx vm image
 run_test "List VMs" cmx vm list vms
 run_test "List regions" cmx vm list regions
 
+
 #
 # SSH keys
 #
 run_test "List SSH keys" cmx vm key list
+run_test "SSH key upload command" cmx vm key upload --help
+run_test "SSH key delete command" cmx vm key delete --help
 
 #
 # Security groups
 #
 run_test "List security groups" cmx vm security-group list
+run_test "Security group info command" cmx vm security-group info --help
+run_test "Security group create command" cmx vm security-group create --help
+run_test "Security group delete command" cmx vm security-group delete --help
+run_test "Security group add command" cmx vm security-group add --help
+run_test "Security group remove command" cmx vm security-group remove --help
+run_test "Security group rule list command" cmx vm security-group rule list --help
+run_test "Security group rule add command" cmx vm security-group rule add --help
+run_test "Security group rule remove command" cmx vm security-group rule remove --help
 
 #
 # Provider-specific / UI command
