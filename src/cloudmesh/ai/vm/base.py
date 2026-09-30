@@ -35,6 +35,10 @@ class BaseVMProvider(ABC):
     def delete(self, name: str) -> bool:
         raise ProviderFeatureNotSupported(self.cloud_name, "delete")
 
+    def login(self, name: str) -> bool:
+        """Logs into a VM."""
+        raise ProviderFeatureNotSupported(self.cloud_name, "login")
+
     def run_command(self, name: str, command: str) -> Optional[str]:
         raise ProviderFeatureNotSupported(self.cloud_name, "run_command")
 

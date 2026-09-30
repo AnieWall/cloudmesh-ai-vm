@@ -89,15 +89,15 @@ class CloudBaseManager(BaseVMProvider, ABC):
 
     def get_security_groups(self) -> List[Dict[str, Any]]:
         """Lists available security groups for the current cloud."""
-        return []
+        return super().get_security_groups()
 
     def upload_key(self, key_path: str, key_name: str) -> bool:
         """Uploads a public key to the cloud provider."""
-        return False
+        return super().upload_key(key_path, key_name)
 
     def delete_key(self, key_name: str) -> bool:
         """Deletes a public key from the cloud provider."""
-        return False
+        return super().delete_key(key_name)
 
     def get_cost(self, **kwargs) -> Optional[Any]:
         """Returns the cost information for the provider."""
@@ -111,9 +111,18 @@ class CloudBaseManager(BaseVMProvider, ABC):
         return {"error": "Account information not supported for this provider."}
 
 
-    def add_security_group_rule(self, group_name: str, port: int, protocol: str = "tcp", cidr: str = "0.0.0.0/0") -> bool:
-        """Adds a security group rule to allow traffic on a specific port."""
-        return False
+    def add_security_group_rule(
+        self,
+        sg_name: str,
+        protocol: str,
+        port: str,
+        cidr: str,
+        direction: str = "ingress",
+    ) -> str:
+        """Adds a firewall rule to a security group."""
+        return super().add_security_group_rule(
+            sg_name, protocol, port, cidr, direction
+        )
 
     def print(self, *args, **kwargs):
         """Helper to print output using the associated rich console if available."""
