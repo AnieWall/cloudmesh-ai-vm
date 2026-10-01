@@ -20,6 +20,7 @@ classifiers = [
 requires-python = ">=3.10"
 dependencies = [
     "cloudmesh-ai-common",
+    "oci",
 ]
 
 [project.scripts]
@@ -38,3 +39,4 @@ chameleon = "cloudmesh.ai.vm.openstack.ChameleonManager:Provider"
 aws = "cloudmesh.ai.vm.aws.AwsManager:Provider"
 azure = "cloudmesh.ai.vm.azure.AzureManager:Provider"
 google = "cloudmesh.ai.vm.google.GoogleManager:Provider"
+oracle = "cloudmesh.ai.vm.oracle.OracleManager:Provider"
