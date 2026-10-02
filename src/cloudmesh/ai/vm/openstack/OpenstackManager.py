@@ -164,18 +164,24 @@ class OpenstackManager(CloudBaseManager):
         nodes = self.driver.list_nodes()
         return next((n for n in nodes if n.name == name), None)
 
+    def exists(self, name: str) -> bool:
+        """
+        Checks if a VM exists in OpenStack.
+        """
+        return self._find_node(name) is not None
+
     def stop(self, name: Optional[str] = None) -> bool:
         """Stops an OpenStack VM."""
-        if not name: return False
+        if not name or not self.exists(name):
+            from cloudmesh.ai.vm.logger import logger
+            logger.error(f"VM {name} not found in {self.cloud_name}")
+            return False
         try:
             node = self._find_node(name)
-            if not node:
-                return False
-            
             # Handle ConflictException 409: cannot stop while BUILDING
             import time
             from cloudmesh.ai.vm.logger import logger
-            
+
             max_retries = 5
             for i in range(max_retries):
                 state = getattr(node, 'state', '').lower()
@@ -184,7 +190,7 @@ class OpenstackManager(CloudBaseManager):
                 logger.warning(f"VM {name} is still building (attempt {i+1}/{max_retries}). Waiting 5s...")
                 time.sleep(5)
                 node = self._find_node(name)
-            
+
             self.driver.stop_node(node)
             return True
         except Exception as e:
@@ -222,7 +228,10 @@ class OpenstackManager(CloudBaseManager):
 
     def delete(self, name: Optional[str] = None) -> bool:
         """Deletes an OpenStack VM."""
-        if not name: return False
+        if not name or not self.exists(name):
+            from cloudmesh.ai.vm.logger import logger
+            logger.error(f"VM {name} not found in {self.cloud_name}")
+            return False
         try:
             node = self._find_node(name)
             if node:
@@ -827,28 +836,49 @@ class OpenstackManager(CloudBaseManager):
         return errors_map
 
 
-    def get_account_info(self) -> Dict[str, Any]:
-        """Returns account and quota information for the OpenStack provider."""
+    def get_provider_info(self) -> Dict[str, Any]:
+        """Gets detailed information about the OpenStack provider."""
+        info = {
+            "provider": "OpenStack",
+            "cloud_name": self.cloud_name,
+            "version": self.version,
+        }
         try:
-            # 1. Get Project/Tenant Information
-            project_info = {}
-            project_result = self._run_cli_command(["openstack", "project", "show", "self", "--format", "json"])
+            # Use a simple CLI call to get basic cloud info if possible
+            result = self._run_cli_command(["openstack", "cloud", "show", self.cloud_name, "-f", "json"])
             import json
-            project_info = json.loads(project_result)
-            
-            # 2. Get Quota/Limits
-            quota_info = {}
-            quota_result = self._run_cli_command(["openstack", "quota show", "--format", "json"])
-            quota_info = json.loads(quota_result)
-            
-            return {
-                "project_id": project_info.get("id"),
-                "project_name": project_info.get("name"),
-                "domain_id": project_info.get("domain_id"),
-                "quotas": quota_info
-            }
-        except Exception as e:
-            from cloudmesh.ai.vm.logger import logger
-            logger.error(f"Error fetching OpenStack account info: {e}")
-            return {"error": f"Failed to fetch OpenStack account info: {str(e)}"}
+            cloud_info = json.loads(result)
+            info.update({
+                "region": cloud_info.get("region_name"),
+                "auth_url": cloud_info.get("auth_url"),
+            })
+        except Exception:
+            pass
+        return info
+
+    def wait_for_status(self, name: str, target_status: str, timeout: int = 300) -> bool:
+        """
+        Polls the OpenStack VM status until it matches target_status.
+        """
+        import time
+        from cloudmesh.ai.vm.logger import logger
+
+        logger.info(f"Waiting for VM {name} to reach status {target_status}...")
+        start_time = time.time()
+
+        while time.time() - start_time < timeout:
+            node = self._find_node(name)
+            if node:
+                current_status = getattr(node, 'state', '').lower()
+                # Normalizing status: e.g., 'active' or 'running'
+                if current_status == target_status.lower() or (
+                    target_status.lower() == 'running' and current_status == 'active'
+                ):
+                    logger.info(f"VM {name} reached status {target_status}.")
+                    return True
+
+            time.sleep(5)
+
+        logger.error(f"Timeout reached waiting for VM {name} to reach status {target_status}.")
+        return False
 

@@ -124,6 +124,34 @@ class CloudBaseManager(BaseVMProvider, ABC):
             sg_name, protocol, port, cidr, direction
         )
 
+    def _execute_ssh_command(self, ip: str, user: str, key_path: str, command: str) -> str:
+        """
+        Generic SSH command executor.
+        """
+        import subprocess
+        import os
+
+        key_path = os.path.expanduser(key_path)
+
+        ssh_cmd = [
+            "ssh",
+            "-i", key_path,
+            "-o", "StrictHostKeyChecking=no",
+            "-o", "UserKnownHostsFile=/dev/null",
+            f"{user}@{ip}",
+            command
+        ]
+
+        try:
+            result = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=30)
+            if result.returncode != 0:
+                return f"SSH Error (code {result.returncode}): {result.stderr}"
+            return result.stdout.strip()
+        except subprocess.TimeoutExpired:
+            return "SSH Error: Command timed out after 30 seconds"
+        except Exception as e:
+            return f"SSH Error: Unexpected error executing command: {e}"
+
     def print(self, *args, **kwargs):
         """Helper to print output using the associated rich console if available."""
         if self.console:

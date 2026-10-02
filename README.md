@@ -72,14 +72,14 @@ cmx vm -i
 
 | Provider | Lifecycle (S/S/D) | Remote Exec (`run`) | Implementation Status |
 | :--- | :---: | :---: | :--- |
-| **Multipass** | ✅ | ✅ (Agent) |  🟢 |
+| **Multipass** | ✅ | ✅ (Agent) | 🟢 |
 | **Lima** | ✅ | ✅ (Agent) | 🟢 |
-| **OpenStack** | ✅ | ✅ (SSH) |  🟢 (via Libcloud) |
-| **WSL2** | ✅ | ✅ (Direct) | 🟡 |
-| **VirtualBox** | ✅ | ✅ (GuestCtrl) | 🟡 |
-| **AWS** | ✅ | ✅ (SSH) | 🟡 (via Libcloud) |
-| **Azure** | ✅ | ✅ (SSH) | 🟡 (via Libcloud) |
-| **Google** | ✅ | ✅ (SSH) | 🟡 (via Libcloud) |
+| **OpenStack** | ✅ | ✅ (SSH) | 🟢 (via Libcloud) |
+| **WSL2** | ✅ | ✅ (Direct) | 🟢 |
+| **VirtualBox** | ✅ | ✅ (GuestCtrl) | 🟢 |
+| **AWS** | ✅ | ✅ (SSH) | 🟢 (via Libcloud) |
+| **Azure** | ✅ | ✅ (SSH) | 🟢 (via Libcloud) |
+| **Google** | ✅ | ✅ (SSH) | 🟢 (via Libcloud) |
 
 🟡 = has been implemented but not tested. We anticipate issues
 
@@ -91,6 +91,26 @@ Full documentation is available in the `/docs` folder or hosted via GitHub Pages
 - [Configuration Guide](docs/configuration.md)
 - [CLI Reference](docs/cli.md)
 - [Architecture Overview](docs/architecture.md)
+
+## Testing
+
+The project includes a compliance suite to ensure all VM providers meet a minimum functional baseline.
+
+### Running Compliance Tests
+
+Tests can be run in two modes:
+
+- **Unit Mode (Default)**: Uses a standardized `MockDriver` to verify return types and basic logic without needing cloud credentials, ensuring a reliable functional baseline across all providers.
+  ```bash
+  PYTHONPATH=. pytest tests/compliance/test_compliance.py
+  ```
+
+- **Integration Mode**: Performs real operations against actual cloud infrastructure. Requires valid credentials in your configuration.
+  ```bash
+  PYTHONPATH=. COMPLIANCE_MODE=integration pytest tests/compliance/test_compliance.py
+  ```
+
+The compliance suite also includes **Scenario Tests** (such as the "Zero-to-Hero" flow) to validate that the end-to-end user experience—from configuration validation to VM deletion—is consistent across all supported cloud and local providers.
 
 ## Contributing
 

@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.4.0] - 2026-10-01
+
+### Added
+- **Provider Compliance Suite**: Implemented a standardized testing framework to ensure all VM providers meet a minimum functional baseline, featuring core mandatory tests and optional feature checks.
+- **Lifecycle Parity**: Implemented `restart`, `reset`, and `suspend` for all cloud-based providers (AWS, Azure, Google, Oracle).
+- **Network Feature Parity**: Implemented `assign_floating_ip` and `release_floating_ip` for AWS, Azure, and Google providers via `LibcloudManager`.
+- **Existence Checks**: Implemented `exists()` method across all providers to verify VM presence before performing operations, eliminating noisy stack traces and crashes.
+- **Local Provider Base Class**: Introduced `LocalBaseManager` to centralize CLI execution logic for Multipass, VBox, WSL2, and Lima, supporting both silent and streaming output.
+- **Compliance Integration Mode**: Added `COMPLIANCE_MODE` environment variable to the provider compliance suite, allowing tests to run in `unit` (mocked) or `integration` (real infrastructure) mode.
+- **MockDriver Infrastructure**: Implemented a `MockDriver` factory for the compliance suite. Instead of falling back to a generic `MagicMock` when a provider crashes during `__init__`, the suite now patches `_get_driver` (or `_init_oci_client`) to return a structured `MockDriver`, ensuring "Core" tests return correct types (e.g., `dict` for config validation) and pass reliably.
+- **UX Scenario Testing**: Added "Zero-to-Hero" flow tests to the compliance suite to ensure consistent end-to-end behavior across all providers.
+- **State Polling**: Implemented `wait_for_status()` across all VM providers to allow the CLI to wait for VMs to reach a specific state (e.g., RUNNING), preventing race conditions during lifecycle operations.
+- **Provider Metadata**: Implemented `get_provider_info()` for all managers, enabling the `cmx vm provider get` command to return detailed version and status information.
+
+### Changed
+- **Libcloud Consolidation**: Moved redundant `start()` and `version` implementations from `AwsManager`, `AzureManager`, and `GoogleManager` into `LibcloudManager` to reduce code duplication.
+- **SSH Execution**: Unified SSH command execution by extracting a shared `_execute_ssh_command` helper into `CloudBaseManager`, reused by both libcloud and OCI providers.
+- **Local Providers**: Migrated Multipass, VBox, WSL2, and Lima managers to inherit from `LocalBaseManager`, removing boilerplate `_run_command` implementations.
+- **Stability**: Updated `stop()`, `delete()`, and `info()` methods across all providers to utilize the new `exists()` check for cleaner error reporting.
+
 ## [1.3.0] - 2026-09-18
 
 ### Added

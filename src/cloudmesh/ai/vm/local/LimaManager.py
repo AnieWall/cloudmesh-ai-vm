@@ -1,10 +1,10 @@
-import subprocess
 import os
+import re
 from typing import List, Dict, Any, Optional
-from cloudmesh.ai.vm.CloudBaseManager import CloudBaseManager
+from .LocalBaseManager import LocalBaseManager
 from cloudmesh.ai.vm.exceptions import VMProviderError
 
-class Provider(CloudBaseManager):
+class Provider(LocalBaseManager):
     """
     Lima implementation of the CloudBaseManager.
     Uses the 'limactl' CLI tool to manage local VMs on macOS.
@@ -18,57 +18,9 @@ class Provider(CloudBaseManager):
     def _verify_installation(self):
         """Ensure limactl is installed on the system."""
         try:
-            subprocess.run(["limactl", "--version"], capture_output=True, check=True)
-        except (subprocess.CalledProcessError, FileNotFoundError):
+            self._run_command(["limactl", "--version"])
+        except Exception:
             raise VMProviderError("limactl not found. Please install Lima (brew install lima) to use this provider.")
-
-    def _run_command(self, command: List[str]) -> subprocess.CompletedProcess:
-        """Helper to run shell commands and stream output in real-time."""
-        try:
-            process = subprocess.Popen(
-                command,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1
-            )
-            
-            full_output = []
-            for line in process.stdout:
-                self.print_ansi(line, end="")
-                full_output.append(line)
-                
-            process.wait()
-            
-            if process.returncode != 0:
-                raise subprocess.CalledProcessError(
-                    process.returncode, 
-                    command, 
-                    output="".join(full_output),
-                    stderr="".join(full_output)
-                )
-                
-            return subprocess.CompletedProcess(
-                args=command, 
-                returncode=process.returncode, 
-                stdout="".join(full_output), 
-                stderr=None
-            )
-        except subprocess.CalledProcessError as e:
-            raise e
-        except Exception as e:
-            self.print(f"Unexpected error executing command {' '.join(command)}: {e}")
-            raise e
-
-
-    def _run_command_silent(self, command: List[str]) -> subprocess.CompletedProcess:
-        """Helper to run shell commands silently and return the result."""
-        return subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            check=True
-        )
 
     def start(self, name: Optional[str] = None, flavor: Optional[str] = None, image: Optional[str] = None) -> str:
         """
@@ -77,13 +29,13 @@ class Provider(CloudBaseManager):
         cloud_config = self.get_cloud_config("lima")
         # Use image override if provided, otherwise fallback to config 'template' or default 'ubuntu'
         template = image or cloud_config.get("template", "ubuntu")
-        
+
         # Name sanitization (underscores to hyphens)
         vm_name = name
         if not vm_name:
             vm_name = "lima-vm"
         vm_name = vm_name.replace("_", "-")
-        
+
         # Resolve template path if it's a file
         expanded_template = os.path.expanduser(template)
         if os.path.exists(expanded_template):
@@ -92,114 +44,109 @@ class Provider(CloudBaseManager):
             # For built-in templates, Lima expects 'template:name' when using --name
             template_arg = f"template:{template}"
 
-        # Check if the VM already exists to avoid "instance already exists" error
-        existing_vms = self.list()
-        vm_exists = any(vm.get("name") == vm_name or vm.get("NAME") == vm_name for vm in existing_vms)
-
-        if vm_exists:
+        if self.exists(vm_name):
             # VM exists, just start it
             command = ["limactl", "start", vm_name, "--tty=false"]
         else:
             # VM doesn't exist, create and start it
             command = ["limactl", "start", "--name", vm_name, "--tty=false", template_arg]
-        
-        self._run_interactive(command)
+
+        self._run_command(command, stream=True)
         return vm_name
 
     def stop(self, name: Optional[str] = None) -> bool:
         """Stops a Lima VM."""
-        if not name:
-            self.print("Error: VM name is required to stop.")
+        if not name or not self.exists(name):
+            self.print(f"Error: VM {name} not found.")
             return False
-        
+
         try:
             self._run_command(["limactl", "stop", name])
             return True
-        except subprocess.CalledProcessError:
+        except Exception:
             return False
 
     def delete(self, name: Optional[str] = None) -> bool:
         """Deletes a Lima VM."""
-        if not name:
-            self.print("Error: VM name is required to delete.")
+        if not name or not self.exists(name):
+            self.print(f"Error: VM {name} not found.")
             return False
-        
+
         try:
             # limactl delete usually requires confirmation, use -f for force
-            self._run_interactive(["limactl", "delete", "-f", name])
+            self._run_command(["limactl", "delete", "-f", name], stream=True)
             return True
-        except subprocess.CalledProcessError:
+        except Exception:
             return False
 
     def list(self) -> List[Dict[str, Any]]:
         """Lists Lima VMs."""
         try:
-            result = self._run_command_silent(["limactl", "list"])
+            result = self._run_command(["limactl", "list"], stream=False)
             lines = result.stdout.strip().split("\n")
             if len(lines) < 2:
                 return []
-            
+
             # Parse headers
             headers = lines[0].split()
             vms = []
-            
+
             for line in lines[1:]:
                 parts = line.split()
                 if len(parts) >= 2:
                     # Use lowercase keys for consistency across providers
                     vm_info = {headers[i].lower(): parts[i] for i in range(min(len(headers), len(parts)))}
-                    
+
                     # Normalize keys for ssh_config and other tools
-                    # Lima uses NAME and SSH
                     name = vm_info.get("name")
                     ip = vm_info.get("ssh") or vm_info.get("ip")
-                    
+
                     vm_info["name"] = name
                     vm_info["ip"] = ip
-                    
-                    vms.append(vm_info)
-            
-            return vms
 
-        except subprocess.CalledProcessError:
+                    vms.append(vm_info)
+
+            return vms
+        except Exception:
             return []
 
     def info(self, name: str) -> Dict[str, Any]:
         """
         Gets detailed information about a Lima VM.
         """
+        if not self.exists(name):
+            return {"error": f"VM {name} not found"}
+
         vms = self.list()
         for vm in vms:
-            if vm.get("Name") == name:
+            if vm.get("name") == name:
                 return vm
         return {"error": f"VM {name} not found"}
-    
+
     def run_command(self, name: str, cmd: str) -> str:
         """
         Executes a command on a Lima VM.
         """
+        if not name or not self.exists(name):
+            raise VMProviderError(f"VM {name} not found.")
         try:
             # limactl shell <name> <cmd>
-            # We use sh -c to ensure the command is executed correctly
-            # Use _run_command_silent to avoid double printing when called from CLI
-            result = self._run_command_silent(["limactl", "shell", name, "sh", "-c", cmd])
+            result = self._run_command(["limactl", "shell", name, "sh", "-c", cmd], stream=False)
             return result.stdout.strip()
-        except subprocess.CalledProcessError as e:
-            return f"Error executing command: {e.stderr or e.output}"
         except Exception as e:
-            return f"Unexpected error: {e}"
+            return f"Error executing command: {e}"
 
     def login(self, name: Optional[str] = None) -> bool:
         """Logs into a Lima VM using 'limactl shell'."""
         if not name:
             self.print("Error: VM name is required to login.")
             return False
-        
+
         try:
-            # Use subprocess.run for interactive shell
+            import subprocess
             subprocess.run(["limactl", "shell", name], check=True)
             return True
-        except subprocess.CalledProcessError:
+        except Exception:
             return False
 
     def suspend(self, name: Optional[str] = None) -> bool:
@@ -208,41 +155,36 @@ class Provider(CloudBaseManager):
 
     def restart(self, name: Optional[str] = None) -> bool:
         """Restarts a Lima VM."""
-        if not name:
-            self.print("Error: VM name is required to restart.")
+        if not name or not self.exists(name):
             return False
-        
         try:
             self.stop(name)
             self._run_command(["limactl", "start", name])
             return True
-        except subprocess.CalledProcessError:
+        except Exception:
             return False
-        
+
     def get_images(self) -> List[Dict[str, Any]]:
         """
         Lists available images in Lima using 'limactl start --list-templates'.
         """
         try:
-            # Use silent command to avoid leaking raw output to console
-            result = self._run_command_silent(["limactl", "start", "--list-templates"])
+            result = self._run_command(["limactl", "start", "--list-templates"], stream=False)
             lines = result.stdout.strip().split("\n")
             if not lines:
                 return []
-            
+
             images = []
-            # Look for lines starting with '- ' which typically indicate templates
             for line in lines:
                 line = line.strip()
                 if line.startswith("- "):
-                    # Example line: "- ubuntu (Ubuntu 22.04 LTS)"
                     content = line[2:].strip()
                     if content:
                         template_name = content.split()[0]
                         images.append({"name": template_name})
-            
+
             return images
-        except (subprocess.CalledProcessError, Exception) as e:
+        except Exception as e:
             self.print(f"Error listing Lima images: {e}")
             return []
 
@@ -272,7 +214,7 @@ class Provider(CloudBaseManager):
         Returns a list of version strings for the limactl tool.
         """
         try:
-            result = self._run_command_silent(["limactl", "--version"])
+            result = self._run_command(["limactl", "--version"], stream=False)
             return [result.stdout.strip()]
         except Exception:
             pass
@@ -285,7 +227,6 @@ class Provider(CloudBaseManager):
     def get_security_groups(self) -> List[Dict[str, Any]]:
         """Lima uses port forwarding instead of security groups."""
         return [{"name": "default", "description": "Local port forwarding"}]
-
 
     def check_requirements(self) -> bool:
         """
@@ -303,15 +244,15 @@ class Provider(CloudBaseManager):
         """
         errors_map = {}
         config = self.get_cloud_config("lima")
-        
+
         config_name = "Cloudmesh config (~/.config/cloudmesh/clouds.yaml)"
         errors = []
         if not config.get("template"):
             errors.append("Missing required field: 'template'")
-        
+
         if errors:
             errors_map[config_name] = errors
-            
+
         return errors_map
 
     def shelve(self, name: Optional[str] = None) -> bool:
@@ -337,7 +278,7 @@ class Provider(CloudBaseManager):
     def get_provider_info(self) -> Dict[str, Any]:
         """Gets detailed information about the Lima provider from 'limactl info'."""
         try:
-            result = self._run_command_silent(["limactl", "info"])
+            result = self._run_command(["limactl", "info"], stream=False)
             info = {}
             for line in result.stdout.strip().split("\n"):
                 line = line.strip()
@@ -351,3 +292,27 @@ class Provider(CloudBaseManager):
             self.print(f"Error getting Lima provider info: {e}")
             return {}
 
+    def wait_for_status(self, name: str, target_status: str, timeout: int = 300) -> bool:
+        """
+        Polls the Lima VM status until it matches target_status.
+        """
+        import time
+        from cloudmesh.ai.vm.logger import logger
+
+        logger.info(f"Waiting for Lima VM {name} to reach status {target_status}...")
+        start_time = time.time()
+
+        while time.time() - start_time < timeout:
+            vms = self.list()
+            vm = next((v for v in vms if v.get("name") == name), None)
+            if vm:
+                # Lima's list() returns lower-case keys. We normalize status.
+                current_status = vm.get("status", '').lower()
+                if current_status == target_status.lower():
+                    logger.info(f"VM {name} reached status {target_status}.")
+                    return True
+
+            time.sleep(5)
+
+        logger.error(f"Timeout reached waiting for Lima VM {name} to reach status {target_status}.")
+        return False

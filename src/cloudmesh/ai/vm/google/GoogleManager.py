@@ -22,51 +22,34 @@ class Provider(LibcloudManager):
             private_key=cloud_config.get("private_key")
         )
 
-    def start(self, name: Optional[str] = None, flavor: Optional[str] = None, image: Optional[str] = None) -> str:
+    def get_provider_info(self) -> Dict[str, Any]:
+        """Gets detailed information about the Google provider."""
+        return {
+            "provider": "Google",
+            "cloud_name": self.cloud_name,
+            "version": self.version,
+        }
+
+    def wait_for_status(self, name: str, target_status: str, timeout: int = 300) -> bool:
         """
-        Starts a Google Compute Engine VM using libcloud.
+        Polls the Google VM status until it matches target_status.
         """
+        import time
         from cloudmesh.ai.vm.logger import logger
 
-        cloud_config = self.get_cloud_config("google")
-        image_name = image or cloud_config.get("image")
-        flavor_name = flavor or cloud_config.get("flavor") or cloud_config.get("size")
+        logger.info(f"Waiting for Google VM {name} to reach status {target_status}...")
+        start_time = time.time()
 
-        if not image_name:
-            raise ValueError(f"Missing 'image' in config or arguments for {self.cloud_name}")
-        if not flavor_name:
-            raise ValueError(f"Missing 'flavor' or 'size' in config or arguments for {self.cloud_name}")
+        while time.time() - start_time < timeout:
+            node = self.driver.get_node(name)
+            if node:
+                current_status = getattr(node, 'state', '').lower()
+                if current_status == target_status.lower():
+                    logger.info(f"VM {name} reached status {target_status}.")
+                    return True
 
-        try:
-            # Find image object
-            all_images = self.driver.list_images()
-            img = next((i for i in all_images if i.name == image_name), None)
-            if not img:
-                raise RuntimeError(f"Could not find image {image_name} in {self.cloud_name}")
+            time.sleep(5)
 
-            # Find flavor/size object
-            all_flavors = self.driver.list_sizes()
-            flv = next((f for f in all_flavors if f.name == flavor_name), None)
-            if not flv:
-                raise RuntimeError(f"Could not find flavor {flavor_name} in {self.cloud_name}")
-
-            vm_name = name or f"vm-{self.cloud_name}"
-            logger.info(f"Starting Google VM {vm_name} with image {image_name} and flavor {flavor_name}...")
-
-            node = self.driver.create_node(name=vm_name, image=img, size=flv)
-            logger.info(f"Successfully started Google VM {vm_name} (ID: {node.id})")
-
-            return node.id
-        except Exception as e:
-            logger.error(f"Libcloud start failed for {self.cloud_name}: {e}")
-            raise e
-
-    @property
-    def version(self) -> List[str]:
-        """Returns the provider version."""
-        try:
-            import libcloud
-            return [f"libcloud: {libcloud.__version__}"]
-        except Exception:
-            return ["libcloud: Unknown"]
+        logger.error(f"Timeout reached waiting for Google VM {name} to reach status {target_status}.")
+        return False
 

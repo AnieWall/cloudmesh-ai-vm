@@ -89,12 +89,23 @@ class Provider(CloudBaseManager):
             logger.error(f"OCI launch failed for {self.cloud_name}: {e}")
             raise e
 
+    def exists(self, name: str) -> bool:
+        """
+        Checks if an Oracle VM exists.
+        """
+        try:
+            self._resolve_instance_id(name)
+            return True
+        except Exception:
+            return False
+
     def stop(self, name: Optional[str] = None) -> bool:
         """Stops an Oracle VM."""
-        if not self.compute_client or not name:
+        if not name:
+            return False
+        if not self.compute_client:
             return False
         try:
-            # We assume name is the OCID for OCI, or we'd need to list and find by display_name
             instance_id = self._resolve_instance_id(name)
             self.compute_client.instance_action(instance_id, "STOP")
             return True
@@ -104,7 +115,9 @@ class Provider(CloudBaseManager):
 
     def delete(self, name: Optional[str] = None) -> bool:
         """Deletes an Oracle VM."""
-        if not self.compute_client or not name:
+        if not name:
+            return False
+        if not self.compute_client:
             return False
         try:
             instance_id = self._resolve_instance_id(name)
@@ -112,6 +125,50 @@ class Provider(CloudBaseManager):
             return True
         except Exception as e:
             logger.error(f"OCI delete failed for {name}: {e}")
+            return False
+
+    def restart(self, name: Optional[str] = None) -> bool:
+        """Restarts an Oracle VM."""
+        if not name:
+            return False
+        if not self.compute_client:
+            return False
+        try:
+            instance_id = self._resolve_instance_id(name)
+            self.compute_client.instance_action(instance_id, "SOFTRESET")
+            return True
+        except Exception as e:
+            logger.error(f"OCI restart failed for {name}: {e}")
+            return False
+
+    def reset(self, name: Optional[str] = None) -> bool:
+        """Resets an Oracle VM (Hard Reset)."""
+        if not name:
+            return False
+        if not self.compute_client:
+            return False
+        try:
+            instance_id = self._resolve_instance_id(name)
+            self.compute_client.instance_action(instance_id, "RESET")
+            return True
+        except Exception as e:
+            logger.error(f"OCI reset failed for {name}: {e}")
+            return False
+
+    def suspend(self, name: Optional[str] = None) -> bool:
+        """Suspends an Oracle VM."""
+        if not name:
+            return False
+        if not self.compute_client:
+            return False
+        try:
+            instance_id = self._resolve_instance_id(name)
+            # OCI doesn't have a direct 'suspend' equivalent in the same way as local,
+            # but we use STOP as a closest approximation or raise unsupported.
+            self.compute_client.instance_action(instance_id, "STOP")
+            return True
+        except Exception as e:
+            logger.error(f"OCI suspend failed for {name}: {e}")
             return False
 
     def list(self) -> List[Dict[str, Any]]:
@@ -146,6 +203,8 @@ class Provider(CloudBaseManager):
 
     def info(self, name: str) -> Dict[str, Any]:
         """Gets detailed info for an Oracle VM."""
+        if not self.exists(name):
+            return {"error": f"Oracle VM {name} not found"}
         if not self.compute_client:
             return {"error": "OCI client not initialized"}
         try:
@@ -163,10 +222,8 @@ class Provider(CloudBaseManager):
             return {"error": str(e)}
 
     def run_command(self, name: str, cmd: str) -> str:
-        """Executes command via SSH (reuse standard pattern)."""
-        # For OCI, we'll implement a basic SSH runner since we don't have LibcloudManager's helper
+        """Executes command via SSH."""
         try:
-            # Resolve IP
             instance_id = self._resolve_instance_id(name)
             vnic_attachments = self.compute_client.list_vnic_attachments(
                 compartment_id=self.get_cloud_config(self.cloud_name).get("compartment_id"),
@@ -183,14 +240,7 @@ class Provider(CloudBaseManager):
             key_path = os.path.expanduser(cloud_config.get("key_file", "~/.ssh/id_rsa"))
             user = cloud_config.get("user", "opc")
 
-            ssh_cmd = [
-                "ssh", "-i", key_path,
-                "-o", "StrictHostKeyChecking=no",
-                "-o", "UserKnownHostsFile=/dev/null",
-                f"{user}@{public_ip}", cmd
-            ]
-            result = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=30)
-            return result.stdout.strip() if result.returncode == 0 else result.stderr
+            return self._execute_ssh_command(public_ip, user, key_path, cmd)
         except Exception as e:
             return f"OCI SSH Error: {e}"
 
@@ -219,3 +269,37 @@ class Provider(CloudBaseManager):
         if errors:
             errors_map["Oracle Cloud Config"] = errors
         return errors_map
+
+    def get_provider_info(self) -> Dict[str, Any]:
+        """Gets detailed information about the Oracle provider."""
+        return {
+            "provider": "Oracle",
+            "cloud_name": self.cloud_name,
+            "version": "OCI SDK",
+        }
+
+    def wait_for_status(self, name: str, target_status: str, timeout: int = 300) -> bool:
+        """
+        Polls the Oracle VM status until it matches target_status.
+        """
+        import time
+        from cloudmesh.ai.vm.logger import logger
+
+        logger.info(f"Waiting for Oracle VM {name} to reach status {target_status}...")
+        start_time = time.time()
+
+        while time.time() - start_time < timeout:
+            try:
+                res = self.info(name)
+                if res and "error" not in res:
+                    current_status = res.get("Status", '').lower()
+                    if current_status == target_status.lower():
+                        logger.info(f"VM {name} reached status {target_status}.")
+                        return True
+            except Exception:
+                pass
+
+            time.sleep(5)
+
+        logger.error(f"Timeout reached waiting for Oracle VM {name} to reach status {target_status}.")
+        return False

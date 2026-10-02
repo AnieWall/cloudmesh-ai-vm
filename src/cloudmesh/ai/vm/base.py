@@ -16,6 +16,24 @@ class BaseVMProvider(ABC):
         """Validates the provider configuration. Returns a map of config paths to errors."""
         return {}
 
+    def exists(self, name: str) -> bool:
+        """Checks if a VM with the given name exists in the provider.
+        Default implementation uses list() to verify existence.
+        """
+        try:
+            vms = self.list()
+            if not vms:
+                return False
+            # Check for name matches (case-insensitive and supporting common key names)
+            return any(
+                str(vm.get("Name")).lower() == name.lower() or
+                str(vm.get("name")).lower() == name.lower()
+                for vm in vms if isinstance(vm, dict)
+            )
+        except Exception:
+            # Return False to avoid noisy stack traces in stop/delete if listing fails
+            return False
+
     # --- Lifecycle Methods ---
     def start(self, name: str) -> bool:
         raise ProviderFeatureNotSupported(self.cloud_name, "start")
@@ -68,6 +86,13 @@ class BaseVMProvider(ABC):
     def get_provider_info(self) -> Dict[str, Any]:
         """Gets detailed information about the provider configuration and status."""
         raise ProviderFeatureNotSupported(self.cloud_name, "get_provider_info")
+
+    def wait_for_status(self, name: str, target_status: str, timeout: int = 300) -> bool:
+        """
+        Polls the VM status until it matches the target_status or the timeout is reached.
+        Returns True if the status was reached, False otherwise.
+        """
+        raise ProviderFeatureNotSupported(self.cloud_name, "wait_for_status")
 
 
     # --- Identity & Security Methods ---
