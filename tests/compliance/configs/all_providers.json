@@ -1,0 +1,48 @@
+{
+    "clouds": {
+        "aws": {
+            "api_key": "mock-key",
+            "secret_key": "mock-secret",
+            "region": "us-east-1"
+        },
+        "azure": {
+            "subscription_id": "mock-sub",
+            "tenant_id": "mock-tenant",
+            "client_id": "mock-client",
+            "client_secret": "mock-secret"
+        },
+        "google": {
+            "project_id": "mock-project",
+            "json_key_file": "/tmp/mock-key.json"
+        },
+        "openstack": {
+            "auth_url": "http://mock-auth",
+            "application_credential_id": "mock-id",
+            "application_credential_secret": "mock-secret",
+            "region_name": "RegionOne"
+        },
+        "jetstream": {
+            "auth_url": "http://mock-auth",
+            "application_credential_id": "mock-id",
+            "application_credential_secret": "mock-secret",
+            "region_name": "RegionOne"
+        },
+        "chameleon": {
+            "auth_url": "http://mock-auth",
+            "application_credential_id": "mock-id",
+            "application_credential_secret": "mock-secret",
+            "region_name": "RegionOne"
+        },
+        "oracle": {
+            "user": "mock-user",
+            "fingerprint": "mock-fp",
+            "tenancy": "mock-tenancy",
+            "region": "us-ashburn-1",
+            "key_file": "/tmp/mock-key.pem"
+        },
+        "multipass": {},
+        "wsl2": {},
+        "vbox": {},
+        "lima": {}
+    }
+}
