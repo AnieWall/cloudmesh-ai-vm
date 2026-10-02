@@ -1,1 +1,1 @@
-/Users/grey/work/cloudmesh-ai-vm/CHANGELOG.md
+../CHANGELOG.md

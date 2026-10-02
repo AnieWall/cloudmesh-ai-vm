@@ -1,1 +1,1 @@
-/Users/grey/work/cloudmesh-ai-vm/README.md
+../README.md

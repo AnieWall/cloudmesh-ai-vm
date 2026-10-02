@@ -34,11 +34,14 @@ nav:
     - Overview: providers/index.md
     - Local Providers:
       - Multipass: providers/local/multipass.md
+      - Lima: providers/local/lima.md
       - WSL2: providers/local/wsl2.md
       - VirtualBox: providers/local/vbox.md
     - OpenStack Providers:
+      - Overview: providers/openstack/openstack.md
       - Jetstream: providers/openstack/jetstream.md
       - Chameleon: providers/openstack/chameleon.md
+      - Security: providers/openstack/security.md
     - Hyperscaler Providers:
       - AWS EC2: providers/hyperscalers/aws.md
       - Azure VMs: providers/hyperscalers/azure.md
