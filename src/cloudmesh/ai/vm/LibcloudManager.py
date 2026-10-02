@@ -40,22 +40,22 @@ class LibcloudManager(CloudBaseManager, ABC):
         flavor_name = flavor or cloud_config.get("flavor") or cloud_config.get("size")
 
         if not image_name:
-            raise ValueError(f"Missing 'image' in config or arguments for {self.cloud_name}")
+            raise ConfigError(f"Missing 'image' in config or arguments for {self.cloud_name}")
         if not flavor_name:
-            raise ValueError(f"Missing 'flavor' or 'size' in config or arguments for {self.cloud_name}")
+            raise ConfigError(f"Missing 'flavor' or 'size' in config or arguments for {self.cloud_name}")
 
         try:
             # Find image object
             all_images = self.driver.list_images()
             img = next((i for i in all_images if i.name == image_name), None)
             if not img:
-                raise RuntimeError(f"Could not find image {image_name} in {self.cloud_name}")
+                raise VMResourceError(f"Could not find image {image_name} in {self.cloud_name}")
 
             # Find flavor/size object
             all_flavors = self.driver.list_sizes()
             flv = next((f for f in all_flavors if f.name == flavor_name), None)
             if not flv:
-                raise RuntimeError(f"Could not find flavor {flavor_name} in {self.cloud_name}")
+                raise VMResourceError(f"Could not find flavor {flavor_name} in {self.cloud_name}")
 
             vm_name = name or f"vm-{self.cloud_name}"
             logger.info(f"Starting {self.cloud_name} VM {vm_name} with image {image_name} and flavor {flavor_name}...")
@@ -218,6 +218,20 @@ class LibcloudManager(CloudBaseManager, ABC):
             return [{"id": s.id, "name": s.name, "ram": getattr(s, 'ram', 'N/A'), "vcpus": getattr(s, 'vcpus', 'N/A')} for s in sizes]
         except Exception as e:
             logger.error(f"Error getting flavors for {self.cloud_name}: {e}")
+            return []
+
+    def list_regions(self) -> List[Dict[str, Any]]:
+        """
+        Lists available regions for the libcloud provider.
+        """
+        try:
+            if hasattr(self.driver, 'list_regions'):
+                regions = self.driver.list_regions()
+                return [{"name": r.name, "id": getattr(r, 'id', r.name)} for r in regions]
+            raise ProviderFeatureNotSupported(self.cloud_name, "list_regions")
+        except Exception as e:
+            if isinstance(e, ProviderFeatureNotSupported): raise e
+            logger.error(f"Error listing regions for {self.cloud_name}: {e}")
             return []
 
     def get_keys(self) -> List[Dict[str, Any]]:

@@ -270,6 +270,68 @@ class Provider(CloudBaseManager):
             errors_map["Oracle Cloud Config"] = errors
         return errors_map
 
+    def upload_key(self, key_path: str, key_name: str) -> bool:
+        """
+        Uploads a public key to the Oracle Cloud Infrastructure.
+        """
+        try:
+            import oci
+            if not self.compute_client:
+                return False
+
+            with open(os.path.expanduser(key_path), 'r') as f:
+                public_key = f.read()
+
+            identity_client = oci.identity.IdentityClient(self.config)
+            identity_client.upload_public_key(
+                user_id=self.config["user"],
+                key_body=public_key,
+                key_name=key_name
+            )
+            return True
+        except Exception as e:
+            logger.error(f"OCI upload_key failed for {key_name}: {e}")
+            return False
+
+    def delete_key(self, key_name: str) -> bool:
+        """
+        Deletes a public key from Oracle Cloud Infrastructure.
+        """
+        try:
+            import oci
+            if not self.compute_client:
+                return False
+
+            identity_client = oci.identity.IdentityClient(self.config)
+            # Finding the key OCID first
+            keys = identity_client.list_public_keys(self.config["user"]).data
+            key_id = next((k.id for k in keys if k.name == key_name), None)
+
+            if not key_id:
+                return False
+
+            identity_client.delete_public_key(key_id)
+            return True
+        except Exception as e:
+            logger.error(f"OCI delete_key failed for {key_name}: {e}")
+            return False
+
+    def list_regions(self) -> List[Dict[str, Any]]:
+        """
+        Lists available regions for Oracle Cloud.
+        """
+        if not self.compute_client:
+            return []
+        try:
+            # Use the OCI identity client to list regions
+            import oci
+            identity_client = oci.identity.IdentityClient(self.config)
+            regions = identity_client.list_regions().data
+            return [{"name": r.region_name, "id": r.region_name} for r in regions]
+        except Exception as e:
+            logger.error(f"OCI list_regions failed: {e}")
+            return []
+
     def get_provider_info(self) -> Dict[str, Any]:
         """Gets detailed information about the Oracle provider."""
         return {

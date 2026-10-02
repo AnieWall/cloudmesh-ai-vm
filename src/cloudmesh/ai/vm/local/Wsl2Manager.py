@@ -1,7 +1,7 @@
 import subprocess
 import re
 from typing import List, Dict, Any, Optional
-from .LocalBaseManager import LocalBaseManager
+from ..LocalBaseManager import LocalBaseManager
 from cloudmesh.ai.vm.exceptions import VMProviderError, ConfigError, VMResourceError, VMAuthError, VMNetworkError
 
 class Provider(LocalBaseManager):

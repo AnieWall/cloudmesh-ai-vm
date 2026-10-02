@@ -1,6 +1,6 @@
 import re
 from typing import List, Dict, Any, Optional
-from .LocalBaseManager import LocalBaseManager
+from ..LocalBaseManager import LocalBaseManager
 from cloudmesh.ai.vm.exceptions import VMProviderError, VMResourceError, ConfigError
 
 class Provider(LocalBaseManager):

@@ -154,16 +154,18 @@ class OpenstackManager(CloudBaseManager):
             logger.error(f"Libcloud start failed for {self.cloud_name}: {e}")
             raise VMProviderError(f"Libcloud start failed for {self.cloud_name}: {e}") from e
 
-    def _find_node(self, name: str):
-        """Helper to find a node by name since some driver versions lack get_node."""
+    def _find_node(self, identifier: str):
+        """Helper to find a node by name or ID since some driver versions lack get_node."""
         try:
             if hasattr(self.driver, 'get_node'):
-                return self.driver.get_node(name)
+                node = self.driver.get_node(identifier)
+                if node:
+                    return node
         except Exception:
             pass
-        
+
         nodes = self.driver.list_nodes()
-        return next((n for n in nodes if n.name == name), None)
+        return next((n for n in nodes if n.name == identifier or n.id == identifier), None)
 
     def exists(self, name: str) -> bool:
         """
@@ -529,7 +531,7 @@ class OpenstackManager(CloudBaseManager):
         except Exception as e:
             from cloudmesh.ai.vm.logger import logger
             logger.error(f"Error getting security group info for {name}: {e}")
-            raise RuntimeError(f"Could not get security group info: {e}")
+            raise VMProviderError(f"Could not get security group info for {name} in {self.cloud_name}: {e}") from e
 
     def create_security_group(self, name: str, description: str = "") -> bool:
         """Creates a security group in OpenStack."""
@@ -601,7 +603,7 @@ class OpenstackManager(CloudBaseManager):
         except Exception as e:
             from cloudmesh.ai.vm.logger import logger
             logger.error(f"Error adding security group rule to {sg_name}: {e}")
-            raise RuntimeError(f"Could not add security group rule: {e}")
+            raise VMProviderError(f"Could not add security group rule for {sg_name} in {self.cloud_name}: {e}") from e
 
     def remove_security_group_rule(self, sg_name: str, rule_id: str) -> bool:
         """Removes a rule by ID."""

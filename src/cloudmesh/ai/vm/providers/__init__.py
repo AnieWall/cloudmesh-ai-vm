@@ -7,6 +7,7 @@ from cloudmesh.ai.vm.google.GoogleManager import Provider as GoogleProvider
 from cloudmesh.ai.vm.local.Wsl2Manager import Provider as Wsl2Provider
 from cloudmesh.ai.vm.local.VBoxManager import Provider as VBoxProvider
 from cloudmesh.ai.vm.local.LimaManager import Provider as LimaProvider
+from cloudmesh.ai.vm.exceptions import VMProviderError
 
 PROVIDER_MAP: Dict[str, Type] = {
     "multipass": MultipassProvider,
@@ -46,7 +47,7 @@ def get_provider(cloud_name: str):
     """
     provider_class = PROVIDER_MAP.get(cloud_name.lower())
     if not provider_class:
-        raise ValueError(f"Unsupported cloud provider: {cloud_name}")
+        raise VMProviderError(f"Unsupported cloud provider: {cloud_name}")
     
     try:
         from cloudmesh.ai.command.vm._shared.context import state
@@ -60,4 +61,4 @@ def get_provider(cloud_name: str):
     try:
         return provider_class(config=config, cloud_name=cloud_name)
     except Exception as e:
-        raise ValueError(f"Failed to instantiate provider {provider_class.__name__}: {e}")
+        raise VMProviderError(f"Failed to instantiate provider {provider_class.__name__} for cloud {cloud_name}: {e}") from e

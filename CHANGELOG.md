@@ -13,9 +13,11 @@
 - **UX Scenario Testing**: Added "Zero-to-Hero" flow tests to the compliance suite to ensure consistent end-to-end behavior across all providers.
 - **State Polling**: Implemented `wait_for_status()` across all VM providers to allow the CLI to wait for VMs to reach a specific state (e.g., RUNNING), preventing race conditions during lifecycle operations.
 - **Provider Metadata**: Implemented `get_provider_info()` for all managers, enabling the `cmx vm provider get` command to return detailed version and status information.
+- **Key Management**: Standardized `upload_key()` and `delete_key()` across all supported providers, including a full implementation for Oracle Cloud Infrastructure.
+- **Developer Onboarding**: Created `COMPLIANCE_GUIDE.md` documenting the provider contract and implementation steps for new compliant providers.
 
 ### Changed
-- **Exception Handling**: Began standardizing exception handling by replacing generic `ValueError` and `RuntimeError` with specific `ConfigError` and `VMResourceError` in `LibcloudManager`.
+- **Exception Handling**: Standardized exception handling across the VM framework, replacing generic `ValueError` and `RuntimeError` with specific hierarchy types (`ConfigError`, `VMResourceError`, `VMProviderError`) and implementing exception chaining for better traceability.
 - **Libcloud Consolidation**: Moved redundant `start()` and `version` implementations from `AwsManager`, `AzureManager`, and `GoogleManager` into `LibcloudManager` to reduce code duplication.
 - **SSH Execution**: Unified SSH command execution by extracting a shared `_execute_ssh_command` helper into `CloudBaseManager`, reused by both libcloud and OCI providers.
 - **Local Providers**: Migrated Multipass, VBox, WSL2, and Lima managers to inherit from `LocalBaseManager`, removing boilerplate `_run_command` implementations.
