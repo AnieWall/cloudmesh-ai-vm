@@ -16,7 +16,7 @@ click==8.3.3
     # via cloudmesh-ai-common
 cloudmesh-ai-common==7.1.3
     # via cloudmesh-ai-vm (pyproject.toml)
-cryptography==48.0.0
+cryptography==50.0.0
     # via paramiko
 decorator==5.2.1
     # via fabric
