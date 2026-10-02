@@ -2,7 +2,7 @@ from typing import List, Dict, Any, Optional
 import os
 import subprocess
 from cloudmesh.ai.vm.CloudBaseManager import CloudBaseManager
-from cloudmesh.ai.vm.exceptions import VMProviderError, ProviderFeatureNotSupported
+from cloudmesh.ai.vm.exceptions import ConfigError, VMResourceError, VMAuthError, VMNetworkError, VMProviderError, ProviderFeatureNotSupported
 from cloudmesh.ai.vm.logger import logger
 
 try:
@@ -65,7 +65,7 @@ class Provider(CloudBaseManager):
         compartment_id = cloud_config.get("compartment_id")
 
         if not all([image_id, shape, subnet_id, compartment_id]):
-            raise ValueError(f"Missing required OCI config: image, flavor/size, subnet_id, or compartment_id")
+            raise ConfigError(f"Missing required OCI config: image, flavor/size, subnet_id, or compartment_id")
 
         vm_name = name or f"vm-{self.cloud_name}"
 
@@ -87,7 +87,7 @@ class Provider(CloudBaseManager):
             return instance.data.id
         except Exception as e:
             logger.error(f"OCI launch failed for {self.cloud_name}: {e}")
-            raise e
+            raise VMProviderError(f"OCI launch failed for {self.cloud_name}: {e}") from e
 
     def exists(self, name: str) -> bool:
         """
@@ -111,7 +111,7 @@ class Provider(CloudBaseManager):
             return True
         except Exception as e:
             logger.error(f"OCI stop failed for {name}: {e}")
-            return False
+            raise VMProviderError(f"OCI stop failed for {name}: {e}") from e
 
     def delete(self, name: Optional[str] = None) -> bool:
         """Deletes an Oracle VM."""
@@ -125,7 +125,7 @@ class Provider(CloudBaseManager):
             return True
         except Exception as e:
             logger.error(f"OCI delete failed for {name}: {e}")
-            return False
+            raise VMProviderError(f"OCI delete failed for {name}: {e}") from e
 
     def restart(self, name: Optional[str] = None) -> bool:
         """Restarts an Oracle VM."""
@@ -204,9 +204,9 @@ class Provider(CloudBaseManager):
     def info(self, name: str) -> Dict[str, Any]:
         """Gets detailed info for an Oracle VM."""
         if not self.exists(name):
-            return {"error": f"Oracle VM {name} not found"}
+            raise VMResourceError(f"Oracle VM {name} not found")
         if not self.compute_client:
-            return {"error": "OCI client not initialized"}
+            raise VMProviderError("OCI client not initialized")
         try:
             instance_id = self._resolve_instance_id(name)
             inst = self.compute_client.get_instance(instance_id).data
@@ -219,7 +219,7 @@ class Provider(CloudBaseManager):
             }
         except Exception as e:
             logger.error(f"OCI info failed for {name}: {e}")
-            return {"error": str(e)}
+            raise VMProviderError(f"OCI info failed for {name}: {e}") from e
 
     def run_command(self, name: str, cmd: str) -> str:
         """Executes command via SSH."""
@@ -254,7 +254,7 @@ class Provider(CloudBaseManager):
         for inst in instances:
             if inst.display_name == name:
                 return inst.id
-        raise RuntimeError(f"Could not find Oracle instance with name {name}")
+        raise VMResourceError(f"Could not find Oracle instance with name {name}")
 
     def validate_config(self) -> Dict[str, List[str]]:
         errors_map = {}

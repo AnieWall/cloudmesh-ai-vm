@@ -2,7 +2,7 @@ import subprocess
 import re
 from typing import List, Dict, Any, Optional
 from .LocalBaseManager import LocalBaseManager
-from cloudmesh.ai.vm.exceptions import VMProviderError
+from cloudmesh.ai.vm.exceptions import VMProviderError, ConfigError, VMResourceError, VMAuthError, VMNetworkError
 
 class Provider(LocalBaseManager):
     """
@@ -20,16 +20,15 @@ class Provider(LocalBaseManager):
         If the distribution doesn't exist, it attempts to import it from a rootfs image.
         """
         if not name:
-            self.print("Error: WSL2 requires a specific distribution name to start.")
-            return "error"
+            raise ConfigError("WSL2 requires a specific distribution name to start.")
 
         # Check if distro already exists
         if self.exists(name):
             try:
                 self._run_command(["wsl", "-d", name])
                 return name
-            except Exception:
-                pass
+            except Exception as e:
+                raise VMProviderError(f"Failed to start existing WSL2 distribution {name}: {e}")
 
         # Attempt to import if not exists
         cloud_config = self.get_cloud_config("wsl2")
@@ -38,44 +37,41 @@ class Provider(LocalBaseManager):
         install_dir = cloud_config.get("install_dir", "C:\\WSL")
 
         if not rootfs:
-            self.print(f"Error: Rootfs image path not configured in YAML for wsl2. Cannot import {name}.")
-            return "error"
+            raise ConfigError(f"Rootfs image path not configured in YAML for wsl2. Cannot import {name}.")
 
         try:
             # wsl --import <Distro> <InstallLocation> <FileName>
             self._run_command(["wsl", "--import", name, install_dir, rootfs])
             self._run_command(["wsl", "-d", name])
             return name
-        except Exception:
-            return "error"
+        except Exception as e:
+            raise VMProviderError(f"Failed to import and start WSL2 distribution {name}: {e}")
 
     def stop(self, name: Optional[str] = None) -> bool:
         """
         Stops (terminates) a WSL2 distribution.
         """
         if not name or not self.exists(name):
-            self.print(f"Error: Distribution {name} not found.")
-            return False
+            raise VMResourceError(f"Distribution {name} not found.")
 
         try:
             self._run_command(["wsl", "--terminate", name])
             return True
-        except Exception:
-            return False
+        except Exception as e:
+            raise VMProviderError(f"Failed to stop WSL2 distribution {name}: {e}")
 
     def delete(self, name: Optional[str] = None) -> bool:
         """
         Deletes (unregisters) a WSL2 distribution.
         """
         if not name or not self.exists(name):
-            self.print(f"Error: Distribution {name} not found.")
-            return False
+            raise VMResourceError(f"Distribution {name} not found.")
 
         try:
             self._run_command(["wsl", "--unregister", name])
             return True
-        except Exception:
-            return False
+        except Exception as e:
+            raise VMProviderError(f"Failed to delete WSL2 distribution {name}: {e}")
 
     def list(self) -> List[Dict[str, Any]]:
         """
@@ -198,15 +194,17 @@ class Provider(LocalBaseManager):
     def info(self, name: str) -> Dict[str, Any]:
         """Gets detailed information about a WSL2 distribution."""
         if not name or not self.exists(name):
-            return {"error": f"Distribution {name} not found"}
+            raise VMResourceError(f"Distribution {name} not found")
         try:
             result = self._run_command(["wsl", "--list", "--verbose"])
             for line in result.stdout.splitlines():
                 if name in line:
                     return {"RawInfo": line.strip()}
-            return {"error": f"Distribution {name} not found"}
+            raise VMResourceError(f"Distribution {name} not found in list")
+        except VMResourceError:
+            raise
         except Exception as e:
-            return {"error": str(e)}
+            raise VMProviderError(f"Error getting info for distribution {name}: {e}")
 
     @property
     def version(self) -> List[str]:

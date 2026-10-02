@@ -1,6 +1,7 @@
 import yaml
 from typing import List, Dict, Any, Optional
 from cloudmesh.ai.vm.CloudBaseManager import CloudBaseManager
+from cloudmesh.ai.vm.exceptions import ConfigError, VMResourceError, VMAuthError, VMNetworkError, VMProviderError
 
 try:
     from libcloud.compute.types import Provider as LibcloudProvider
@@ -69,7 +70,7 @@ class OpenstackManager(CloudBaseManager):
         region_name = cloud_config.get("region_name", auth.get("region_name", "RegionOne"))
 
         if not all([app_cred_id, app_cred_secret, auth_url]):
-            raise RuntimeError(
+            raise ConfigError(
                 f"Missing required application credentials for cloud '{self.cloud_name}'. "
                 f"Checked both Cloudmesh config and {os_clouds_path}. "
                 f"Please ensure 'application_credential_id', 'application_credential_secret', "
@@ -117,7 +118,7 @@ class OpenstackManager(CloudBaseManager):
         
         if result.returncode != 0:
             logger.error(f"CLI command failed: {result.stderr}")
-            raise RuntimeError(f"CLI command failed: {result.stderr}")
+            raise VMProviderError(f"CLI command failed: {result.stderr}")
         
         return result.stdout
 
@@ -129,21 +130,21 @@ class OpenstackManager(CloudBaseManager):
         security_group = cloud_config.get("security_group", "default")
         
         if not image_name:
-            raise ValueError(f"Missing 'image' in config for {self.cloud_name}")
+            raise ConfigError(f"Missing 'image' in config for {self.cloud_name}")
         if not flavor_name:
-            raise ValueError(f"Missing 'flavor' in config for {self.cloud_name}")
+            raise ConfigError(f"Missing 'flavor' in config for {self.cloud_name}")
 
         try:
             # Find image and flavor objects
             all_images = self.driver.list_images()
             img = next((i for i in all_images if i.name == image_name), None)
             if not img:
-                raise RuntimeError(f"Could not find image {image_name} in {self.cloud_name}")
+                raise VMResourceError(f"Could not find image {image_name} in {self.cloud_name}")
 
             all_flavors = self.driver.list_sizes()
             flv = next((f for f in all_flavors if f.name == flavor_name), None)
             if not flv:
-                raise RuntimeError(f"Could not find flavor {flavor_name} in {self.cloud_name}")
+                raise VMResourceError(f"Could not find flavor {flavor_name} in {self.cloud_name}")
 
             vm_name = name or f"vm-{self.cloud_name}"
             node = self.driver.create_node(name=vm_name, image=img, size=flv)
@@ -151,7 +152,7 @@ class OpenstackManager(CloudBaseManager):
         except Exception as e:
             from cloudmesh.ai.vm.logger import logger
             logger.error(f"Libcloud start failed for {self.cloud_name}: {e}")
-            raise e
+            raise VMProviderError(f"Libcloud start failed for {self.cloud_name}: {e}") from e
 
     def _find_node(self, name: str):
         """Helper to find a node by name since some driver versions lack get_node."""
@@ -196,7 +197,7 @@ class OpenstackManager(CloudBaseManager):
         except Exception as e:
             from cloudmesh.ai.vm.logger import logger
             logger.error(f"Libcloud stop failed for {name}: {e}")
-            return False
+            raise VMProviderError(f"Libcloud stop failed for {name}: {e}") from e
 
     def shelve(self, name: Optional[str] = None) -> bool:
         """Shelves an OpenStack VM (preserves disk, releases compute resources)."""
@@ -241,7 +242,7 @@ class OpenstackManager(CloudBaseManager):
         except Exception as e:
             from cloudmesh.ai.vm.logger import logger
             logger.error(f"Libcloud delete failed for {name}: {e}")
-            return False
+            raise VMProviderError(f"Libcloud delete failed for {name}: {e}") from e
 
     def list(self) -> List[Dict[str, Any]]:
         """Lists all OpenStack VMs with their reachable IP addresses."""
@@ -315,10 +316,10 @@ class OpenstackManager(CloudBaseManager):
         try:
             node = self.driver.get_node(name)
             if not node:
-                return {"error": f"VM {name} not found"}
-            
+                raise VMResourceError(f"VM {name} not found")
+
             floating_ip = self._get_floating_ip(name)
-            
+
             return {
                 "Name": getattr(node, 'name', name),
                 "ID": getattr(node, 'id', 'N/A'),
@@ -329,10 +330,12 @@ class OpenstackManager(CloudBaseManager):
                 "RAM": getattr(node, 'ram', 'N/A'),
                 "CPUs": getattr(node, 'cpus', 'N/A'),
             }
+        except VMResourceError:
+            raise
         except Exception as e:
             from cloudmesh.ai.vm.logger import logger
             logger.error(f"Error getting info for VM {name} in {self.cloud_name}: {e}")
-            return {"error": str(e)}
+            raise VMProviderError(f"Error getting info for VM {name} in {self.cloud_name}: {e}") from e
 
     def login(self, name: Optional[str] = None) -> bool:
         """

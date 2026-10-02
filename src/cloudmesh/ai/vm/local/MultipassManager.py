@@ -1,7 +1,7 @@
 import re
 from typing import List, Dict, Any, Optional
 from .LocalBaseManager import LocalBaseManager
-from cloudmesh.ai.vm.exceptions import VMProviderError
+from cloudmesh.ai.vm.exceptions import VMProviderError, VMResourceError, ConfigError
 
 class Provider(LocalBaseManager):
     """
@@ -18,6 +18,8 @@ class Provider(LocalBaseManager):
         Starts (launches) a Multipass VM with optional resource configurations.
         """
         cloud_config = self.get_cloud_config("multipass")
+        if not cloud_config:
+            raise ConfigError("Multipass configuration not found in cloud config.")
 
         # 1. Resolve image
         vm_image = image or cloud_config.get("image", "22.04")
@@ -48,36 +50,35 @@ class Provider(LocalBaseManager):
 
         command.append(str(vm_image))
 
-        self._run_command(command, stream=True)
+        try:
+            self._run_command(command, stream=True)
+        except Exception as e:
+            raise VMProviderError(f"Failed to launch Multipass VM: {e}")
 
         return name if name else "multipass-generated"
 
     def stop(self, name: Optional[str] = None) -> bool:
         """Stops a Multipass VM."""
         if not name or not self.exists(name):
-            self.print(f"Error: VM {name} not found in multipass.")
-            return False
+            raise VMResourceError(f"VM {name} not found in multipass.")
 
         try:
             self._run_command(["multipass", "stop", name])
             return True
         except Exception as e:
-            self.print(f"Error stopping VM {name}: {e}")
-            return False
+            raise VMProviderError(f"Error stopping VM {name}: {e}")
 
     def delete(self, name: Optional[str] = None) -> bool:
         """Deletes a Multipass VM."""
         if not name or not self.exists(name):
-            self.print(f"Error: VM {name} not found in multipass.")
-            return False
+            raise VMResourceError(f"VM {name} not found in multipass.")
 
         try:
             self._run_command(["multipass", "delete", name])
             self._run_command(["multipass", "purge"])
             return True
         except Exception as e:
-            self.print(f"Error deleting VM {name}: {e}")
-            return False
+            raise VMProviderError(f"Error deleting VM {name}: {e}")
 
     def restart(self, name: Optional[str] = None) -> bool:
         """Restarts a Multipass VM."""
@@ -142,8 +143,17 @@ class Provider(LocalBaseManager):
                     })
             return vms
         except Exception as e:
-            self.print(f"Error listing Multipass VMs: {e}")
-            return []
+            raise VMProviderError(f"Error listing Multipass VMs: {e}")
+
+    def info(self, name: str) -> Dict[str, Any]:
+        """Gets detailed information about a Multipass VM."""
+        if not name or not self.exists(name):
+            raise VMResourceError(f"VM {name} not found in multipass.")
+        try:
+            result = self._run_command(["multipass", "info", name], stream=False)
+            return {"Name": name, "RawInfo": result.stdout}
+        except Exception as e:
+            raise VMProviderError(f"Error getting info for VM {name}: {e}")
 
     def get_images(self) -> List[Dict[str, Any]]:
         """Lists available Multipass images."""

@@ -15,6 +15,7 @@
 - **Provider Metadata**: Implemented `get_provider_info()` for all managers, enabling the `cmx vm provider get` command to return detailed version and status information.
 
 ### Changed
+- **Exception Handling**: Began standardizing exception handling by replacing generic `ValueError` and `RuntimeError` with specific `ConfigError` and `VMResourceError` in `LibcloudManager`.
 - **Libcloud Consolidation**: Moved redundant `start()` and `version` implementations from `AwsManager`, `AzureManager`, and `GoogleManager` into `LibcloudManager` to reduce code duplication.
 - **SSH Execution**: Unified SSH command execution by extracting a shared `_execute_ssh_command` helper into `CloudBaseManager`, reused by both libcloud and OCI providers.
 - **Local Providers**: Migrated Multipass, VBox, WSL2, and Lima managers to inherit from `LocalBaseManager`, removing boilerplate `_run_command` implementations.

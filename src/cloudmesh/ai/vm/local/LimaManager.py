@@ -2,7 +2,7 @@ import os
 import re
 from typing import List, Dict, Any, Optional
 from .LocalBaseManager import LocalBaseManager
-from cloudmesh.ai.vm.exceptions import VMProviderError
+from cloudmesh.ai.vm.exceptions import VMProviderError, ConfigError, VMResourceError, VMAuthError, VMNetworkError
 
 class Provider(LocalBaseManager):
     """
@@ -51,33 +51,34 @@ class Provider(LocalBaseManager):
             # VM doesn't exist, create and start it
             command = ["limactl", "start", "--name", vm_name, "--tty=false", template_arg]
 
-        self._run_command(command, stream=True)
+        try:
+            self._run_command(command, stream=True)
+        except Exception as e:
+            raise VMProviderError(f"Failed to start Lima VM {vm_name}: {e}")
         return vm_name
 
     def stop(self, name: Optional[str] = None) -> bool:
         """Stops a Lima VM."""
         if not name or not self.exists(name):
-            self.print(f"Error: VM {name} not found.")
-            return False
+            raise VMResourceError(f"VM {name} not found.")
 
         try:
             self._run_command(["limactl", "stop", name])
             return True
-        except Exception:
-            return False
+        except Exception as e:
+            raise VMProviderError(f"Failed to stop Lima VM {name}: {e}")
 
     def delete(self, name: Optional[str] = None) -> bool:
         """Deletes a Lima VM."""
         if not name or not self.exists(name):
-            self.print(f"Error: VM {name} not found.")
-            return False
+            raise VMResourceError(f"VM {name} not found.")
 
         try:
             # limactl delete usually requires confirmation, use -f for force
             self._run_command(["limactl", "delete", "-f", name], stream=True)
             return True
-        except Exception:
-            return False
+        except Exception as e:
+            raise VMProviderError(f"Failed to delete Lima VM {name}: {e}")
 
     def list(self) -> List[Dict[str, Any]]:
         """Lists Lima VMs."""
@@ -114,14 +115,14 @@ class Provider(LocalBaseManager):
         """
         Gets detailed information about a Lima VM.
         """
-        if not self.exists(name):
-            return {"error": f"VM {name} not found"}
+        if not name or not self.exists(name):
+            raise VMResourceError(f"VM {name} not found")
 
         vms = self.list()
         for vm in vms:
             if vm.get("name") == name:
                 return vm
-        return {"error": f"VM {name} not found"}
+        raise VMResourceError(f"VM {name} not found in list")
 
     def run_command(self, name: str, cmd: str) -> str:
         """

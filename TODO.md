@@ -11,7 +11,8 @@
 - [x] **Expand Security Group Support**: Implement `create_security_group` and `add_security_group_rule` for Azure and Google providers.
 - [x] **Network Feature Parity**: Implement `assign_floating_ip` and `release_floating_ip` for AWS, Azure, and Google providers.
 - [ ] **Region Discovery**: Implement `list_regions` for all cloud-based providers to allow users to switch regions via CLI.
-- [ ] **Key Management Parity**: Implement `upload_key` and `delete_key` consistently across all providers.
+- [ ] **Key Management Parity**: Implement `upload_key` and `delete_key` consistently across all providers. 
+    - *Note: Not supported for local providers (WSL2, VBox, Lima) as they use host-based SSH keys.*
 - [ ] **Key Rotation**: Add `rotate_key` to `BaseVMProvider` and implement it for providers that support SSH key updates.
 
 ## Low Priority (UX & Polish)
@@ -21,8 +22,8 @@
 - [ ] **Unified IP Abstraction**: Create a `NetworkInterface` class to handle the differences between Floating IPs, Public IPs, and Internal IPs across providers.
 
 ## Provider Compliance Suite Enhancements
-- [ ] **Robust Instantiation & Mocking**: Implement a `MockDriver` factory to replace `MagicMock` and allow actual provider logic to be tested without real API calls.
-- [ ] **Integration Testing Mode**: Add a `COMPLIANCE_MODE` environment variable to switch between `unit` and `integration` (real cloud) tests.
+- [x] **Robust Instantiation & Mocking**: Implement a `MockDriver` factory to replace `MagicMock` and allow actual provider logic to be tested without real API calls.
+- [x] **Integration Testing Mode**: Add a `COMPLIANCE_MODE` environment variable to switch between `unit` and `integration` (real cloud) tests.
 - [ ] **Compliance Matrix Reporting**: Create a custom report/table showing the compliance status of every provider across all tested features.
 - [ ] **Negative & Edge-Case Testing**: Add tests for invalid VM names, invalid configurations, and unauthorized API access.
 - [ ] **Strict Interface Validation**: Use the `inspect` module to verify that provider method signatures match `BaseVMProvider` exactly.

@@ -1,7 +1,7 @@
 import re
 from typing import List, Dict, Any, Optional
 from .LocalBaseManager import LocalBaseManager
-from cloudmesh.ai.vm.exceptions import VMProviderError
+from cloudmesh.ai.vm.exceptions import VMProviderError, VMResourceError, ConfigError
 
 class Provider(LocalBaseManager):
     """
@@ -16,45 +16,42 @@ class Provider(LocalBaseManager):
         This implementation assumes the VM already exists.
         """
         if not name or not self.exists(name):
-            self.print(f"Error: VirtualBox VM {name} not found.")
-            return "error"
+            raise VMResourceError(f"VirtualBox VM {name} not found.")
 
         try:
             # Start the VM in headless mode (no GUI window)
             self._run_command(["VBoxManage", "startvm", name, "--type", "headless"])
             return name
-        except Exception:
-            return "error"
+        except Exception as e:
+            raise VMProviderError(f"Failed to start VirtualBox VM {name}: {e}")
 
     def stop(self, name: Optional[str] = None) -> bool:
         """
         Stops a VirtualBox VM.
         """
         if not name or not self.exists(name):
-            self.print(f"Error: VM {name} not found.")
-            return False
+            raise VMResourceError(f"VM {name} not found.")
 
         try:
             # poweroff is the fastest way to stop. acpishutdown is cleaner but slower.
             self._run_command(["VBoxManage", "controlvm", name, "poweroff"])
             return True
-        except Exception:
-            return False
+        except Exception as e:
+            raise VMProviderError(f"Error stopping VM {name}: {e}")
 
     def delete(self, name: Optional[str] = None) -> bool:
         """
         Deletes a VirtualBox VM and its registered files.
         """
         if not name or not self.exists(name):
-            self.print(f"Error: VM {name} not found.")
-            return False
+            raise VMResourceError(f"VM {name} not found.")
 
         try:
             # unregistervm --delete removes the VM from the list and deletes the files on disk
             self._run_command(["VBoxManage", "unregistervm", name, "--delete"])
             return True
-        except Exception:
-            return False
+        except Exception as e:
+            raise VMProviderError(f"Error deleting VM {name}: {e}")
 
     def list(self) -> List[Dict[str, Any]]:
         """
@@ -183,12 +180,12 @@ class Provider(LocalBaseManager):
     def info(self, name: str) -> Dict[str, Any]:
         """Gets detailed information about a VirtualBox VM."""
         if not name or not self.exists(name):
-            return {"error": f"VM {name} not found."}
+            raise VMResourceError(f"VM {name} not found.")
         try:
             result = self._run_command(["VBoxManage", "showvminfo", name])
             return {"Name": name, "RawInfo": result.stdout}
         except Exception as e:
-            return {"error": str(e)}
+            raise VMProviderError(f"Error getting info for VM {name}: {e}")
 
     def validate_config(self) -> Dict[str, List[str]]:
         """
