@@ -46,10 +46,13 @@ Launches a new VM.
 
 - **Options**:
   - `<name>`: (Optional) Specify a custom name. If omitted, the tool generates a name based on `<username>-<counter>` (e.g., `gregor-1`). Underscores in usernames are automatically replaced with hyphens to ensure provider compatibility.
+  - `--count <int>`: Start a specified number of VMs with automatic naming.
+  - `--range <range>`: Start VMs in the specified index range (e.g., `1-5`).
 - **Examples**:
   - Default: `cmx vm start`
   - Custom Name: `cmx vm start my-web-server`
   - Cloud Override: `cmx vm start --cloud aws`
+  - Multiple VMs: `cmx vm start --count 3`
 
 #### `stop`
 
@@ -59,13 +62,13 @@ Stops a running VM.
   - `<name>`: (Optional) Name of the VM to stop. If omitted, the last started VM is used.
 - **Example**: `cmx vm stop` (Stops last VM)
 
-#### `delete`
+#### `restart`
 
-Permanently removes a VM.
+Reboots a VM.
 
 - **Options**:
-  - `<name>`: (Optional) Name of the VM to delete. If omitted, the last started VM is used.
-- **Example**: `cmx vm delete --name my-web-server`
+  - `<name>`: (Optional) Name of the VM to restart. If omitted, the last started VM is used.
+- **Example**: `cmx vm restart`
 
 #### `suspend`
 
@@ -75,13 +78,29 @@ Suspends a VM to disk (if supported by the provider).
   - `<name>`: (Optional) Name of the VM to suspend. If omitted, the last started VM is used.
 - **Example**: `cmx vm suspend`
 
-#### `restart`
+#### `shelve`
 
-Reboots a VM.
+Shelves a VM (OpenStack only), saving its state and freeing up resources.
 
 - **Options**:
-  - `<name>`: (Optional) Name of the VM to restart. If omitted, the last started VM is used.
-- **Example**: `cmx vm restart`
+  - `<name>`: (Optional) Name of the VM to shelve.
+- **Example**: `cmx vm shelve my-vm`
+
+#### `unshelve`
+
+Unshelves a previously shelved VM.
+
+- **Options**:
+  - `<name>`: (Optional) Name of the VM to unshelve.
+- **Example**: `cmx vm unshelve my-vm`
+
+#### `delete`
+
+Permanently removes a VM.
+
+- **Options**:
+  - `<name>`: (Optional) Name of the VM to delete. If omitted, the last started VM is used.
+- **Example**: `cmx vm delete --name my-web-server`
 
 #### `login`
 
@@ -98,11 +117,19 @@ Provides connection details or logs into the VM.
 Lists all VMs managed by the current provider. The output table includes the provider name in the header (e.g., "VMs on multipass").
 
 - **Options**:
+  - `--all`: List VMs from all enabled providers.
   - `--table`: (Default) Prints a formatted table.
   - `--json`: Prints output in JSON format.
   - `--yaml`: Prints output in YAML format.
   - `--csv`: Prints output in CSV format.
 - **Example**: `cmx vm list --json`
+
+#### `info`
+
+Displays detailed information about a specific VM, including its current state, IP addresses, and provider-specific metadata.
+
+- **Usage**: `cmx vm info <name>`
+- **Example**: `cmx vm info my-vm`
 
 #### `image`
 
@@ -157,6 +184,14 @@ Starts an interactive SSH session with the VM.
 - **Example**: `cmx vm ssh` (Connects to last VM)
 - **Example**: `cmx vm ssh my-web-server`
 
+#### `run`
+
+Executes a command on a VM via SSH without entering an interactive shell.
+
+- **Usage**: `cmx vm run [name] "command"`
+- **Example**: `cmx vm run my-vm "uptime"`
+- **Example**: `cmx vm run "hostname"` (Runs on last VM)
+
 #### `ssh-config`
 
 Generates suggested SSH configuration entries for all existing VMs in the current cloud. This allows you to connect using `ssh <vm-name>` without modifying your config file automatically.
@@ -172,6 +207,13 @@ Displays account information, including usage quotas and limits for the current 
 - **Usage**: `cmx vm account`
 - **Example**: `cmx vm account`
 
+#### `horizon`
+
+Opens the OpenStack Horizon dashboard in your default web browser for the active cloud provider.
+
+- **Usage**: `cmx vm horizon [--site SITE]`
+- **Example**: `cmx vm horizon`
+
 #### `reset`
 
 Restarts the cloud provider service or resets the local environment. For Multipass on macOS, this restarts the `multipassd` daemon.
@@ -179,19 +221,17 @@ Restarts the cloud provider service or resets the local environment. For Multipa
 - **Usage**: `cmx vm reset`
 - **Example**: `cmx vm reset`
 
-### 6. Specialized Commands
+### 6. Configuration
 
-#### `reservation` (Chameleon Only)
+#### `config`
 
-Creates a hardware reservation (lease) in Chameleon Cloud.
+Manage the VM CLI configuration stored in `~/.config/cloudmesh/clouds.yaml`.
 
-- **Options**:
-  - `--name <name>`: (Required) Name of the reservation.
-  - `--node-type <type>`: (Required) e.g., `compute_skylake`.
-  - `--count <int>`: (Required) Number of nodes.
-  - `--start <datetime>`: Start date (YYYY-MM-DD HH:MM).
-  - `--end <datetime>`: End date (YYYY-MM-DD HH:MM).
-  - `--duration <int>`: Duration of the lease in days.
+- **Subcommands**:
+  - `get KEY`: Get a specific configuration value.
+  - `init`: Initialize the VM CLI configuration.
+  - `list`: List all current VM configuration settings.
+  - `set KEY VALUE`: Set a configuration value.
 - **Examples**:
-  - Duration based: `cmx vm reservation --name my-lease --node-type compute_skylake --count 1 --duration 2`
-  - Date based: `cmx vm reservation --name my-lease --node-type compute_skylake --count 1 --start "2026-10-01 08:00" --end "2026-10-02 08:00"`
+  - `cmx vm config list`
+  - `cmx vm config set default_cloud multipass`

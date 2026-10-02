@@ -1,6 +1,1 @@
-# Changelog
-
-All notable changes to this project will be documented in this file.
-
-## [Unreleased]
-- Initial project setup.
+/Users/grey/work/cloudmesh-ai-vm/CHANGELOG.md

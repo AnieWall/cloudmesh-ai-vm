@@ -12,11 +12,14 @@ A quick reference guide for all available Virtual Machine management commands in
 | | `stop [name]` | Stop a running VM | `cmx vm stop` |
 | | `restart [name]` | Reboot a VM | `cmx vm restart` |
 | | `suspend [name]` | Suspend VM to disk (if supported) | `cmx vm suspend` |
+| | `shelve [name]` | Shelve VM (OpenStack only) | `cmx vm shelve` |
+| | `unshelve [name]` | Unshelve a shelved VM (OpenStack only) | `cmx vm unshelve` |
 | | `delete [name]` | Permanently remove a VM | `cmx vm delete` |
 | | `reset` | Reset VM or restart provider daemon | `cmx vm reset` |
 | | `login [name]` | Get connection info or log into VM | `cmx vm login` |
 | | `ssh [name]` | Start an interactive SSH session | `cmx vm ssh` |
 | **Discovery** | `list` | List all VMs for the active provider | `cmx vm list` |
+| | `info [name]` | Get detailed information about a VM | `cmx vm info` |
 | | `image` | List available VM images | `cmx vm image` |
 | | `flavor` | List available hardware profiles | `cmx vm flavor` |
 | | `key list` | List available SSH keys | `cmx vm key list` |
@@ -25,11 +28,11 @@ A quick reference guide for all available Virtual Machine management commands in
 | | `ssh-config [name]` | Generate SSH config for `~/.ssh/config` | `cmx vm ssh-config` |
 | | `key upload <path>` | Upload a public key to the cloud | `cmx vm key upload ~/.ssh/id_rsa.pub` |
 | | `key delete <name>` | Delete an SSH key from the cloud | `cmx vm key delete my-key` |
-| **System** | `account` | View account usage and quotas | `cmx vm account` |
+| **System** | `config` | Manage VM CLI configuration | `cmx vm config` |
+| | `account` | View account usage and quotas | `cmx vm account` |
 | | `horizon` | Open the OpenStack Horizon dashboard | `cmx vm horizon` |
-| **Special** | `reservation` | Create a hardware reservation (Chameleon) | `cmx vm reservation --name lease1 ...` |
 
-## 💡 Pro Tips
+## Tips
 
 ### 1. Contextual Memory
 Most lifecycle commands (`stop`, `delete`, `restart`, `login`) remember the last VM you started. If you omit the `[name]`, the tool automatically targets that VM.

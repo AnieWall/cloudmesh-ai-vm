@@ -27,8 +27,13 @@ Manage the CLI configuration stored in `~/.config/cloudmesh/clouds.yaml`.
 
 ### Lifecycle Management
 
-- **`start [NAME]`**: Starts or launches a VM. If no name is provided, a name is generated based on `{username}-{counter}`.
+- **`start [NAME]`**: Starts or launches a VM.
+  - **Options**:
+    - `--count <int>`: Launch a specific number of VMs with automatic naming.
+    - `--range <range>`: Launch VMs in the specified index range (e.g., `1-5`).
+  - If no name is provided, a name is generated based on `{username}-{counter}`.
   - *Example*: `cmx vm start my-vm`
+  - *Example*: `cmx vm start --count 3`
 - **`stop [NAME]`**: Stops a running VM.
   - *Example*: `cmx vm stop my-vm`
 - **`restart [NAME]`**: Restarts a VM.
@@ -44,6 +49,8 @@ Manage the CLI configuration stored in `~/.config/cloudmesh/clouds.yaml`.
 ### Resource Discovery
 
 - **`list`**: List VM resources.
+  - **Options**:
+    - `--all`: List resources from all enabled providers.
   - `cmx vm list vms`: List all VMs in the active cloud.
   - `cmx vm list regions`: List available regions for the current provider.
 - **`info NAME`**: Get detailed information (IPs, State, etc.) about a specific VM.
@@ -82,12 +89,14 @@ Manage SSH keys for VM access.
   - *Example*: `cmx vm ssh my-vm`
 - **`login [NAME]`**: Get connection info or log into the VM.
   - *Example*: `cmx vm login my-vm`
-- **`ssh_config [NAME]`**: Generate a local SSH configuration snippet for easy access.
+- **`ssh-config [NAME]`**: Generate a local SSH configuration snippet for easy access.
 
 ### Account & System
 
 - **`account`**: View account information, including usage quotas and limits for the current cloud.
   - *Example*: `cmx vm account`
+- **`horizon`**: Open the OpenStack Horizon dashboard in your default web browser for the active cloud provider.
+  - *Example*: `cmx vm horizon`
 - **`reset`**: Restart the cloud provider service or reset the local environment (e.g., restart Multipass daemon on macOS).
   - *Example*: `cmx vm reset`
 
