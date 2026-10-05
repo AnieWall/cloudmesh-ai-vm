@@ -89,3 +89,10 @@ def test_security_group_current_ip_lookup_failure():
     ):
         with pytest.raises(VMCommandError):
             resolve_cidr("CURRENT_IP")
+
+def test_vm_help_loads(runner):
+    """Verify that the VM CLI loads successfully and displays help."""
+    result = runner.invoke(cmx, ["vm", "--help"])
+
+    assert result.exit_code == 0
+    assert "VM management commands" in result.output
