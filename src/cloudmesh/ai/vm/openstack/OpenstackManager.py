@@ -163,6 +163,13 @@ class OpenstackManager(CloudBaseManager):
                 )
 
             vm_name = name or f"vm-{self.cloud_name}"
+
+            # Append username and site for shared clouds to prevent collisions
+            if self.cloud_name in ["jetstream", "chameleon"]:
+                username = cloud_config.get("username", "user").replace("_", "-")
+                site = cloud_config.get("site", self.cloud_name).replace("_", "-").replace("@", "").lower()
+                vm_name = f"{vm_name}-{site}-{username}"
+
             node = self.driver.create_node(
                 name=vm_name,
                 image=img,

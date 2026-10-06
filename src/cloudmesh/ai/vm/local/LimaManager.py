@@ -310,3 +310,41 @@ class Provider(LocalBaseManager):
 
         logger.error(f"Timeout reached waiting for Lima VM {name} to reach status {target_status}.")
         return False
+
+    def upload_key(self, key_path: str, key_name: str, vm_name: Optional[str] = None) -> bool:
+        """
+        Uploads a public key to the local VM.
+        Implementation: Appends the key to ~/.ssh/authorized_keys via run_command.
+        """
+        if not vm_name:
+            self.print("Error: upload_key requires a vm_name for Lima.")
+            return False
+
+        try:
+            import os
+            key_path = os.path.expanduser(key_path)
+            if not os.path.exists(key_path):
+                self.print(f"Error: Key file not found: {key_path}")
+                return False
+
+            with open(key_path, "r") as f:
+                pub_key = f.read().strip()
+
+            # command: limactl shell <vm> bash -c "mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo '<key> # <name>' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+            cmd = ["limactl", "shell", vm_name, "bash", "-c",
+                   f"mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo '{pub_key} # {key_name}' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"]
+
+            self._run_command(cmd)
+            self.print(f"Successfully uploaded key {key_name} to VM {vm_name}")
+            return True
+        except Exception as e:
+            self.print(f"Error uploading key to {vm_name}: {e}")
+            return False
+
+    def delete_key(self, key_name: str, vm_name: Optional[str] = None) -> bool:
+        """
+        Deletes a public key from a Lima VM.
+        Not implemented as per user request.
+        """
+        from cloudmesh.ai.vm.exceptions import ProviderFeatureNotSupported
+        raise ProviderFeatureNotSupported(self.cloud_name, "delete_key")

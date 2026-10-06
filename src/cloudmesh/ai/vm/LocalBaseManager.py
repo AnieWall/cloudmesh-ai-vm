@@ -3,7 +3,7 @@ import logging
 from abc import ABC
 from typing import List, Dict, Any, Optional
 from .CloudBaseManager import CloudBaseManager
-from .exceptions import VMProviderError
+from .exceptions import VMProviderError, ProviderFeatureNotSupported
 
 logger = logging.getLogger("cloudmesh.ai.vm")
 
