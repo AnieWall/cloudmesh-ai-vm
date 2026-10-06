@@ -1,6 +1,18 @@
 # Changelog
 
+## [1.6.0] - 2026-10-05
+
+### Added
+- **Secret Masking**: Implemented a pattern-based redaction utility in `providers_utils.py` to mask sensitive data (tokens, passwords, API keys) in CLI error messages.
+- **WSL2 Portability**: Enhanced `Wsl2Manager` to automatically detect the most compatible binary (`wsl.exe` or `wsl`) for seamless operation across Windows CMD, PowerShell, Git Bash, and WSL-native environments.
+- **Documentation**: Updated the VM Management Manual to document the new WSL2 environment support.
+
+### Fixed
+- **Security Leakage**: Integrated secret masking into `OpenstackManager` to prevent credential exposure in `stderr` logs.
+- **Git Tracking**: Removed `cache-username.yaml` from version control and added it to `.gitignore`.
+
 ## [1.5.0] - 2026-10-02
+
 
 ### Added
 - **Advanced Hostname Resolution**: Implemented regex-based VM identification, allowing users to target groups of VMs using wildcards (e.g., `web-*`) or regular expressions.

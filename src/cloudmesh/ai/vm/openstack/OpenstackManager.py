@@ -2,6 +2,7 @@ import yaml
 from typing import List, Dict, Any, Optional
 from cloudmesh.ai.vm.CloudBaseManager import CloudBaseManager
 from cloudmesh.ai.vm.exceptions import ConfigError, VMResourceError, VMAuthError, VMNetworkError, VMProviderError
+from cloudmesh.ai.command.vm._shared.providers_utils import sanitize_output
 
 try:
     from libcloud.compute.types import Provider as LibcloudProvider
@@ -117,9 +118,10 @@ class OpenstackManager(CloudBaseManager):
         result = subprocess.run(cmd, capture_output=True, text=True, env=env)
         
         if result.returncode != 0:
-            logger.error(f"CLI command failed: {result.stderr}")
-            raise VMProviderError(f"CLI command failed: {result.stderr}")
-        
+            sanitized_stderr = sanitize_output(result.stderr)
+            logger.error(f"CLI command failed: {sanitized_stderr}")
+            raise VMProviderError(f"CLI command failed: {sanitized_stderr}")
+
         return result.stdout
 
     def start(self, name: Optional[str] = None, flavor: Optional[str] = None, image: Optional[str] = None) -> str:
@@ -410,7 +412,7 @@ class OpenstackManager(CloudBaseManager):
             result = subprocess.run(cmd, capture_output=True, text=True, env=env)
             
             if result.returncode != 0:
-                logger.error(f"CLI fallback failed: {result.stderr}")
+                logger.error(f"CLI fallback failed: {sanitize_output(result.stderr)}")
                 return []
             
             lines = result.stdout.strip().split('\n')
