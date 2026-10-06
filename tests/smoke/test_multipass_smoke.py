@@ -52,11 +52,35 @@ def ssh_key(tmp_path):
 def test_multipass_smoke(temp_config, ssh_key):
     """
     Smoke test for Multipass provider:
-    Start -> SSH Key Upload -> Verify Key -> List -> Stop -> Delete
+    Requirements -> Images -> Flavors -> Info -> Start -> Key Mgmt -> List -> Stop -> Delete
     """
     priv_key_path, pub_key_path = ssh_key
     state = StateManager(temp_config)
     provider = factory.create("multipass", state.config)
+
+    # --- Provider Level Checks ---
+    with StopWatch.timer("multipass_check_reqs"):
+        print("Checking Multipass requirements...")
+        assert provider.check_requirements() is True
+
+    with StopWatch.timer("multipass_get_images"):
+        print("Fetching available images...")
+        images = provider.get_images()
+        assert isinstance(images, list)
+        print(f"Found {len(images)} images.")
+
+    with StopWatch.timer("multipass_get_flavors"):
+        print("Fetching available flavors...")
+        flavors = provider.get_flavors()
+        assert isinstance(flavors, list)
+        assert len(flavors) > 0
+        print(f"Found {len(flavors)} flavors.")
+
+    with StopWatch.timer("multipass_get_provider_info"):
+        print("Fetching provider info...")
+        p_info = provider.get_provider_info()
+        assert p_info.get("provider") == "Multipass"
+        print(f"Provider version: {p_info.get('version')}")
 
     # Use unique name based on cloud user and a random suffix
     cloud_config = provider.get_cloud_config("multipass")
@@ -89,12 +113,24 @@ def test_multipass_smoke(temp_config, ssh_key):
                 f"Connectivity check failed for {vm_name}: {hostname}"
             print(f"Connectivity check successful. Hostname: {hostname}")
 
-        # SSH Key Upload
+        # Shelve and Unshelve (Resource management)
+        with StopWatch.timer("multipass_shelve"):
+            print(f"Shelving VM {vm_name}...")
+            assert provider.shelve(vm_name) is True
+            assert provider.wait_for_status(vm_name, "Stopped", timeout=60) is True
+            print("VM shelved successfully.")
+
+        with StopWatch.timer("multipass_unshelve"):
+            print(f"Unshelving VM {vm_name}...")
+            assert provider.unshelve(vm_name) is True
+            assert provider.wait_for_status(vm_name, "Running", timeout=60) is True
+            print("VM unshelved successfully.")
+
+        # SSH Key Management
         with StopWatch.timer("multipass_upload_key"):
             print(f"Uploading SSH key from {pub_key_path}...")
             assert provider.upload_key(pub_key_path, "smoke-key", vm_name) is True
 
-        # Verify SSH Key
         with StopWatch.timer("multipass_verify_key"):
             print("Verifying SSH key in VM...")
             with open(pub_key_path, "r") as f:
@@ -106,6 +142,17 @@ def test_multipass_smoke(temp_config, ssh_key):
             result = subprocess.run(verify_cmd, capture_output=True)
             assert result.returncode == 0, f"SSH key was not found in {vm_name}'s authorized_keys"
             print("SSH key verified successfully.")
+
+        with StopWatch.timer("multipass_delete_key"):
+            print("Deleting uploaded SSH key...")
+            assert provider.delete_key("smoke-key", vm_name) is True
+
+        with StopWatch.timer("multipass_verify_key_deleted"):
+            print("Verifying SSH key is removed...")
+            verify_cmd_del = ["multipass", "exec", vm_name, "--", "bash", "-c", f"grep -q '{escaped_key}' ~/.ssh/authorized_keys"]
+            result_del = subprocess.run(verify_cmd_del, capture_output=True)
+            assert result_del.returncode != 0, f"SSH key should have been removed from {vm_name}"
+            print("SSH key removal verified.")
 
         # Test info
         with StopWatch.timer("multipass_info"):
