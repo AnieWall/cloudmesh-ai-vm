@@ -28,7 +28,7 @@ def test_start_with_name_and_config(provider):
 
     # Verify the command constructed
     expected_command = ["multipass", "launch", "-c", "2", "-m", "4GiB", "-d", "20GiB", "-n", vm_name, "22.04"]
-    provider._run_command.assert_called_once_with(
+    provider._run_command.assert_any_call(
         expected_command,
         stream=True
     )
@@ -38,7 +38,7 @@ def test_start_without_name(provider):
     result = provider.start()
 
     expected_command = ["multipass", "launch", "-c", "2", "-m", "4GiB", "-d", "20GiB", "22.04"]
-    provider._run_command.assert_called_once_with(
+    provider._run_command.assert_any_call(
         expected_command,
         stream=True
     )

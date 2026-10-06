@@ -16,7 +16,16 @@ class Provider(LocalBaseManager):
     def start(self, name: Optional[str] = None, flavor: Optional[str] = None, image: Optional[str] = None) -> str:
         """
         Starts (launches) a Multipass VM with optional resource configurations.
+        If the VM already exists, it starts the existing VM.
         """
+        # If name is provided and VM already exists, just start it
+        if name and self.exists(name):
+            try:
+                self._run_command(["multipass", "start", name], stream=True)
+                return name
+            except Exception as e:
+                raise VMProviderError(f"Failed to start existing Multipass VM {name}: {e}")
+
         cloud_config = self.get_cloud_config("multipass")
         if not cloud_config:
             raise ConfigError("Multipass configuration not found in cloud config.")
