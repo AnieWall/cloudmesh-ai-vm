@@ -4,6 +4,7 @@ import pytest
 import shutil
 import uuid
 import time
+import subprocess
 from cloudmesh.ai.vm.state_manager import StateManager
 from cloudmesh.ai.vm.factory import factory
 from cloudmesh.ai.vm.local.MultipassManager import Provider as MultipassProvider
@@ -33,11 +34,27 @@ def temp_config(tmp_path):
 
     return str(config_file)
 
-def test_multipass_smoke(temp_config):
+@pytest.fixture
+def ssh_key(tmp_path):
+    """Generate a temporary SSH key pair."""
+    key_path = tmp_path / "id_rsa"
+    pub_key_path = tmp_path / "id_rsa.pub"
+
+    # Generate key without passphrase
+    subprocess.run(
+        ["ssh-keygen", "-t", "rsa", "-b", "2048", "-f", str(key_path), "-N", ""],
+        check=True,
+        capture_output=True
+    )
+
+    return str(key_path), str(pub_key_path)
+
+def test_multipass_smoke(temp_config, ssh_key):
     """
     Smoke test for Multipass provider:
-    Start -> List -> Stop -> Delete
+    Start -> SSH Key Upload -> Verify Key -> List -> Stop -> Delete
     """
+    priv_key_path, pub_key_path = ssh_key
     state = StateManager(temp_config)
     provider = factory.create("multipass", state.config)
 
@@ -71,6 +88,24 @@ def test_multipass_smoke(temp_config):
             assert hostname is not None and hostname != "" and "Error" not in hostname, \
                 f"Connectivity check failed for {vm_name}: {hostname}"
             print(f"Connectivity check successful. Hostname: {hostname}")
+
+        # SSH Key Upload
+        with StopWatch.timer("multipass_upload_key"):
+            print(f"Uploading SSH key from {pub_key_path}...")
+            assert provider.upload_key(pub_key_path, "smoke-key", vm_name) is True
+
+        # Verify SSH Key
+        with StopWatch.timer("multipass_verify_key"):
+            print("Verifying SSH key in VM...")
+            with open(pub_key_path, "r") as f:
+                pub_key_content = f.read().strip()
+
+            escaped_key = pub_key_content.replace("'", "'\\''")
+            verify_cmd = ["multipass", "exec", vm_name, "--", "bash", "-c", f"grep -q '{escaped_key}' ~/.ssh/authorized_keys"]
+
+            result = subprocess.run(verify_cmd, capture_output=True)
+            assert result.returncode == 0, f"SSH key was not found in {vm_name}'s authorized_keys"
+            print("SSH key verified successfully.")
 
         # Test info
         with StopWatch.timer("multipass_info"):
