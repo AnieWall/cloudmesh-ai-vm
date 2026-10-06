@@ -355,28 +355,3 @@ class Provider(CloudBaseManager):
             },
         }
 
-    def wait_for_status(self, name: str, target_status: str, timeout: int = 300) -> bool:
-        """
-        Polls the Oracle VM status until it matches target_status.
-        """
-        import time
-        from cloudmesh.ai.vm.logger import logger
-
-        logger.info(f"Waiting for Oracle VM {name} to reach status {target_status}...")
-        start_time = time.time()
-
-        while time.time() - start_time < timeout:
-            try:
-                res = self.info(name)
-                if res and "error" not in res:
-                    current_status = res.get("Status", '').lower()
-                    if current_status == target_status.lower():
-                        logger.info(f"VM {name} reached status {target_status}.")
-                        return True
-            except Exception:
-                pass
-
-            time.sleep(5)
-
-        logger.error(f"Timeout reached waiting for Oracle VM {name} to reach status {target_status}.")
-        return False

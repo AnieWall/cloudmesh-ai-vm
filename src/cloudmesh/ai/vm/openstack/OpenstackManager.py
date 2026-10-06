@@ -746,7 +746,7 @@ class OpenstackManager(CloudBaseManager):
             logger.error(f"Error uploading key {key_name}: {e}")
             return False
 
-    def delete_key(self, key_name: str) -> bool:
+    def delete_key(self, key_name: str, vm_name: Optional[str] = None) -> bool:
         """
         Deletes a public key from OpenStack.
         """
@@ -836,12 +836,6 @@ class OpenstackManager(CloudBaseManager):
             logger.error(f"Error releasing floating IP for {name}: {e}")
             return False
 
-            result = subprocess.run(cmd, capture_output=True, text=True, env=env)
-            return result.returncode == 0
-        except Exception as e:
-            from cloudmesh.ai.vm.logger import logger
-            logger.error(f"Error deleting key {key_name}: {e}")
-            return False
 
 
     def run_command(self, name: str, cmd: str) -> str:
@@ -937,29 +931,23 @@ class OpenstackManager(CloudBaseManager):
 
         return info
 
-    def wait_for_status(self, name: str, target_status: str, timeout: int = 300) -> bool:
-        """
-        Polls the OpenStack VM status until it matches target_status.
-        """
-        import time
-        from cloudmesh.ai.vm.logger import logger
+    def _get_current_status(self, name: str) -> str:
+        """Returns the current status of the OpenStack VM."""
+        node = self._find_node(name)
+        return getattr(node, 'state', '') if node else ''
 
-        logger.info(f"Waiting for VM {name} to reach status {target_status}...")
-        start_time = time.time()
+    def _normalize_status(self, status: str) -> str:
+        """Normalizes status, treating 'active' as 'running'."""
+        normalized = super()._normalize_status(status)
+        return 'running' if normalized == 'active' else normalized
 
-        while time.time() - start_time < timeout:
-            node = self._find_node(name)
-            if node:
-                current_status = getattr(node, 'state', '').lower()
-                # Normalizing status: e.g., 'active' or 'running'
-                if current_status == target_status.lower() or (
-                    target_status.lower() == 'running' and current_status == 'active'
-                ):
-                    logger.info(f"VM {name} reached status {target_status}.")
-                    return True
 
-            time.sleep(5)
+    def _get_current_status(self, name: str) -> str:
+        """Returns the current status of the OpenStack VM."""
+        node = self._find_node(name)
+        return getattr(node, 'state', '') if node else ''
 
-        logger.error(f"Timeout reached waiting for VM {name} to reach status {target_status}.")
-        return False
-
+    def _normalize_status(self, status: str) -> str:
+        """Normalizes status, treating 'active' as 'running'."""
+        normalized = super()._normalize_status(status)
+        return 'running' if normalized == 'active' else normalized

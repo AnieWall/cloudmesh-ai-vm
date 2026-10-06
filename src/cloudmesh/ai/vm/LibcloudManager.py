@@ -21,6 +21,14 @@ class LibcloudManager(CloudBaseManager, ABC):
         """Returns the libcloud driver instance."""
         pass
 
+    def _get_current_status(self, name: str) -> str:
+        """Returns the current status of the VM using the libcloud driver."""
+        try:
+            node = self.driver.get_node(name)
+            return getattr(node, 'state', '') if node else ''
+        except Exception:
+            return ''
+
     def exists(self, name: str) -> bool:
         """
         Checks if a VM exists using the libcloud driver.

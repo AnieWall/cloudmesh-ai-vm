@@ -95,9 +95,9 @@ class CloudBaseManager(BaseVMProvider, ABC):
         """Uploads a public key to the cloud provider."""
         return super().upload_key(key_path, key_name)
 
-    def delete_key(self, key_name: str) -> bool:
+    def delete_key(self, key_name: str, vm_name: Optional[str] = None) -> bool:
         """Deletes a public key from the cloud provider."""
-        return super().delete_key(key_name)
+        return super().delete_key(key_name, vm_name=vm_name)
 
     def get_cost(self, **kwargs) -> Optional[Any]:
         """Returns the cost information for the provider."""
@@ -106,9 +106,41 @@ class CloudBaseManager(BaseVMProvider, ABC):
     def validate_config(self) -> Dict[str, List[str]]:
         """Validates that the cloud configuration has all required fields."""
         return {}
-    def get_account_info(self) -> Dict[str, Any]:
-        """Returns account and quota information for the current provider."""
-        return {"error": "Account information not supported for this provider."}
+    def _get_current_status(self, name: str) -> str:
+        """Returns the current status of the VM. Must be implemented by child classes."""
+        raise ProviderFeatureNotSupported(self.cloud_name, "_get_current_status")
+
+    def _normalize_status(self, status: str) -> str:
+        """Normalizes the status string for comparison."""
+        return status.lower() if status else ""
+
+    def wait_for_status(self, name: str, target_status: str, timeout: int = 300) -> bool:
+        """
+        Polls the VM status until it matches the target_status or the timeout is reached.
+        Returns True if the status was reached, False otherwise.
+        """
+        import time
+        from cloudmesh.ai.vm.logger import logger
+
+        logger.info(f"Waiting for VM {name} to reach status {target_status}...")
+        start_time = time.time()
+
+        while time.time() - start_time < timeout:
+            try:
+                current_status = self._get_current_status(name)
+                if current_status:
+                    normalized_current = self._normalize_status(current_status)
+                    normalized_target = self._normalize_status(target_status)
+                    if normalized_current == normalized_target:
+                        logger.info(f"VM {name} reached status {target_status}.")
+                        return True
+            except Exception as e:
+                logger.error(f"Error polling status for VM {name}: {e}")
+
+            time.sleep(5)
+
+        logger.error(f"Timeout reached waiting for VM {name} to reach status {target_status}.")
+        return False
 
 
     def add_security_group_rule(

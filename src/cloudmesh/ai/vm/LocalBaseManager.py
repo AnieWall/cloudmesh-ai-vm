@@ -83,7 +83,7 @@ class LocalBaseManager(CloudBaseManager, ABC):
         # For the base class, we raise NotSupported as it needs a VM target.
         raise ProviderFeatureNotSupported(self.cloud_name, "upload_key")
 
-    def delete_key(self, key_name: str) -> bool:
+    def delete_key(self, key_name: str, vm_name: Optional[str] = None) -> bool:
         """
         Deletes a public key from the local VM.
         """

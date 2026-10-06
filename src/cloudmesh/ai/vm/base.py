@@ -104,8 +104,10 @@ class BaseVMProvider(ABC):
         """Uploads a public key."""
         raise ProviderFeatureNotSupported(self.cloud_name, "upload_key")
 
-    def delete_key(self, key_name: str) -> bool:
-        """Deletes a public key."""
+    def delete_key(self, key_name: str, vm_name: Optional[str] = None) -> bool:
+        """Deletes a public key from the cloud provider.
+        Optional vm_name for providers that manage keys per-VM.
+        """
         raise ProviderFeatureNotSupported(self.cloud_name, "delete_key")
 
     def get_security_groups(self) -> List[Dict[str, Any]]:
@@ -158,6 +160,6 @@ class BaseVMProvider(ABC):
         raise ProviderFeatureNotSupported(self.cloud_name, "release_floating_ip")
 
     # --- Cost Methods ---
-    def get_cost(self, **kwargs) -> Any:
+    def get_cost(self, **kwargs) -> Optional[Any]:
         """Calculates the cost for a VM configuration."""
         raise ProviderFeatureNotSupported(self.cloud_name, "get_cost")

@@ -1,4 +1,5 @@
 from typing import List, Dict, Any, Optional
+import subprocess
 from cloudmesh.ai.vm.LibcloudManager import LibcloudManager
 
 try:
@@ -23,36 +24,21 @@ class Provider(LibcloudManager):
             region=cloud_config.get("region", "us-east-1")
         )
 
-    def wait_for_status(self, name: str, target_status: str, timeout: int = 300) -> bool:
-        """
-        Polls the AWS VM status until it matches target_status.
-        """
-        import time
-        from cloudmesh.ai.vm.logger import logger
-
-        logger.info(f"Waiting for AWS VM {name} to reach status {target_status}...")
-        start_time = time.time()
-
-        while time.time() - start_time < timeout:
-            try:
-                node = self.driver.get_node(name)
+    def _find_node(self, identifier: str):
+        """Helper to find a node by name or ID since some driver versions lack get_node."""
+        try:
+            if hasattr(self.driver, 'get_node'):
+                node = self.driver.get_node(identifier)
                 if node:
-                    current_status = getattr(node, 'state', '').lower()
-                    if current_status == target_status.lower():
-                        logger.info(f"VM {name} reached status {target_status}.")
-                        return True
-            except Exception:
-                pass
+                    return node
+        except Exception:
+            pass
 
-            time.sleep(5)
-
-        logger.error(f"Timeout reached waiting for AWS VM {name} to reach status {target_status}.")
-        return False
+        nodes = self.driver.list_nodes()
+        return next((n for n in nodes if n.name == identifier or n.id == identifier), None)
 
     def get_provider_info(self) -> Dict[str, Any]:
-
         """Gets detailed information about the AWS provider."""
-        import subprocess
 
         version = "Unknown"
         try:

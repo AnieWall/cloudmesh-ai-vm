@@ -252,6 +252,12 @@ class Provider(LocalBaseManager):
         import shutil
         return shutil.which(binary) is not None
 
+    def _get_current_status(self, name: str) -> str:
+        """Returns the current status of the WSL2 distribution."""
+        vms = self.list()
+        vm = next((v for v in vms if v["Name"] == name), None)
+        return vm["State"] if vm else ""
+
     def validate_config(self) -> Dict[str, List[str]]:
         """
         Validates WSL2 configuration.
@@ -280,26 +286,3 @@ class Provider(LocalBaseManager):
             },
         }
 
-    def wait_for_status(self, name: str, target_status: str, timeout: int = 300) -> bool:
-        """
-        Polls the WSL2 VM status until it matches target_status.
-        """
-        import time
-        from cloudmesh.ai.vm.logger import logger
-
-        logger.info(f"Waiting for WSL2 VM {name} to reach status {target_status}...")
-        start_time = time.time()
-
-        while time.time() - start_time < timeout:
-            vms = self.list()
-            vm = next((v for v in vms if v["Name"] == name), None)
-            if vm:
-                current_status = vm["State"].lower()
-                if current_status == target_status.lower():
-                    logger.info(f"VM {name} reached status {target_status}.")
-                    return True
-
-            time.sleep(5)
-
-        logger.error(f"Timeout reached waiting for WSL2 VM {name} to reach status {target_status}.")
-        return False
