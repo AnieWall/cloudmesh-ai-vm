@@ -261,7 +261,7 @@ class LibcloudManager(CloudBaseManager, ABC):
             logger.error(f"Error getting keys for {self.cloud_name}: {e}")
             return []
 
-    def upload_key(self, key_path: str, key_name: str) -> bool:
+    def upload_key(self, key_path: str, key_name: str, vm_name: Optional[str] = None) -> bool:
         """
         Uploads a public key to the cloud provider using libcloud.
         """
@@ -275,7 +275,7 @@ class LibcloudManager(CloudBaseManager, ABC):
             logger.error(f"Error uploading key {key_name} in {self.cloud_name}: {e}")
             return False
 
-    def delete_key(self, key_name: str) -> bool:
+    def delete_key(self, key_name: str, vm_name: Optional[str] = None) -> bool:
         """
         Deletes a public key from the cloud provider using libcloud.
         """

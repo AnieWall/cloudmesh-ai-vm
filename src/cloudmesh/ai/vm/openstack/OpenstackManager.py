@@ -725,7 +725,7 @@ class OpenstackManager(CloudBaseManager):
         import shutil
         return shutil.which("openstack") is not None
 
-    def upload_key(self, key_path: str, key_name: str) -> bool:
+    def upload_key(self, key_path: str, key_name: str, vm_name: Optional[str] = None) -> bool:
         """
         Uploads a public key to OpenStack.
         """

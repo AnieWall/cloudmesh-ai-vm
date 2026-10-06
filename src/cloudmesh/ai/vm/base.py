@@ -35,35 +35,35 @@ class BaseVMProvider(ABC):
             return False
 
     # --- Lifecycle Methods ---
-    def start(self, name: str) -> bool:
+    def start(self, name: Optional[str] = None, flavor: Optional[str] = None, image: Optional[str] = None) -> str:
         raise ProviderFeatureNotSupported(self.cloud_name, "start")
 
-    def stop(self, name: str) -> bool:
+    def stop(self, name: Optional[str] = None) -> bool:
         raise ProviderFeatureNotSupported(self.cloud_name, "stop")
 
-    def restart(self, name: str) -> bool:
+    def restart(self, name: Optional[str] = None) -> bool:
         raise ProviderFeatureNotSupported(self.cloud_name, "restart")
 
-    def reset(self, name: str) -> bool:
+    def reset(self, name: Optional[str] = None) -> bool:
         raise ProviderFeatureNotSupported(self.cloud_name, "reset")
 
-    def suspend(self, name: str) -> bool:
+    def suspend(self, name: Optional[str] = None) -> bool:
         raise ProviderFeatureNotSupported(self.cloud_name, "suspend")
 
     def delete(self, name: Optional[str] = None) -> bool:
         raise ProviderFeatureNotSupported(self.cloud_name, "delete")
 
-    def login(self, name: str) -> bool:
+    def login(self, name: Optional[str] = None) -> bool:
         """Logs into a VM."""
         raise ProviderFeatureNotSupported(self.cloud_name, "login")
 
-    def run_command(self, name: str, command: str) -> Optional[str]:
+    def run_command(self, name: str, cmd: str) -> str:
         raise ProviderFeatureNotSupported(self.cloud_name, "run_command")
 
-    def shelve(self, name: str) -> bool:
+    def shelve(self, name: Optional[str] = None) -> bool:
         raise ProviderFeatureNotSupported(self.cloud_name, "shelve")
 
-    def unshelve(self, name: str) -> bool:
+    def unshelve(self, name: Optional[str] = None) -> bool:
         raise ProviderFeatureNotSupported(self.cloud_name, "unshelve")
 
     # --- Inventory Methods ---
@@ -100,7 +100,7 @@ class BaseVMProvider(ABC):
         """Lists available SSH keys."""
         raise ProviderFeatureNotSupported(self.cloud_name, "get_keys")
 
-    def upload_key(self, key_path: str, key_name: str) -> bool:
+    def upload_key(self, key_path: str, key_name: str, vm_name: Optional[str] = None) -> bool:
         """Uploads a public key."""
         raise ProviderFeatureNotSupported(self.cloud_name, "upload_key")
 

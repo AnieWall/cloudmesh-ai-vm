@@ -69,8 +69,8 @@ class Provider(LocalBaseManager):
                 match = re.match(r'"([^"]+)"\s+\{([^}]+)\}', line)
                 if match:
                     vms.append({
-                        "Name": match.group(1),
-                        "UUID": match.group(2)
+                        "name": match.group(1),
+                        "uuid": match.group(2)
                     })
             return vms
         except Exception:

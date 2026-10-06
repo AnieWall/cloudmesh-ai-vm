@@ -53,10 +53,10 @@ def test_list_parsing(provider):
     provider._run_command.return_value = MagicMock(stdout=mock_output, returncode=0)
     vms = provider.list()
     assert len(vms) == 2
-    assert vms[0]["Name"] == "VM 1"
-    assert vms[0]["UUID"] == "uuid1"
-    assert vms[1]["Name"] == "VM 2"
-    assert vms[1]["UUID"] == "uuid2"
+    assert vms[0]["name"] == "VM 1"
+    assert vms[0]["uuid"] == "uuid1"
+    assert vms[1]["name"] == "VM 2"
+    assert vms[1]["uuid"] == "uuid2"
     provider._run_command.assert_called_once_with(["VBoxManage", "list", "vms"])
 
 def test_suspend_success(provider):
