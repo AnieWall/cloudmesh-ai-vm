@@ -1,6 +1,7 @@
 from typing import Dict, Type, Optional, Any
 from cloudmesh.ai.vm.CloudBaseManager import CloudBaseManager
 from cloudmesh.ai.vm.exceptions import VMProviderError
+from cloudmesh.ai.vm.logger import logger
 
 class ProviderFactory:
     """
