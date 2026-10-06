@@ -167,23 +167,22 @@ class Provider(LocalBaseManager):
             raise VMProviderError(f"Error getting info for VM {name}: {e}")
 
     def get_images(self) -> List[Dict[str, Any]]:
-        """Lists available Multipass images."""
+        """Lists available Multipass images using 'multipass find --format json'."""
         try:
-            result = self._run_command(["multipass", "images"], stream=False)
-            lines = result.stdout.strip().split("\n")
-            if not lines:
-                return []
+            import json
+            result = self._run_command(["multipass", "find", "--format", "json"], stream=False)
+            data = json.loads(result.stdout)
 
+            images_data = data.get("images", {})
             images = []
-            # Skip the header line "Available images:" and parse lines starting with "- "
-            for line in lines:
-                line = line.strip()
-                if line.startswith("- "):
-                    # Example line: "- 22.04 (Ubuntu Jammy Jellyfish)"
-                    content = line[2:].strip()
-                    if content:
-                        image_name = content.split()[0]
-                        images.append({"name": image_name})
+            for name, info in images_data.items():
+                images.append({
+                    "name": name,
+                    "aliases": info.get("aliases", []),
+                    "os": info.get("os"),
+                    "release": info.get("release"),
+                    "version": info.get("version")
+                })
             return images
         except Exception as e:
             self.print(f"Error listing Multipass images: {e}")
@@ -226,9 +225,9 @@ class Provider(LocalBaseManager):
             with open(key_path, "r") as f:
                 pub_key = f.read().strip()
 
-            # command: multipass exec <vm> -- bash -c "mkdir -p ~/.ssh && echo '<key>' >> ~/.ssh/authorized_keys"
+            # command: multipass exec <vm> -- bash -c "mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo '<key> # <name>' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
             cmd = ["multipass", "exec", vm_name, "--", "bash", "-c",
-                   f"mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo '{pub_key}' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"]
+                   f"mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo '{pub_key} # {key_name}' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"]
 
             self._run_command(cmd)
             self.print(f"Successfully uploaded key {key_name} to VM {vm_name}")
@@ -287,7 +286,11 @@ class Provider(LocalBaseManager):
         """
         Unshelves a Multipass VM by starting it.
         """
-        return self.start(name)
+        try:
+            self.start(name)
+            return True
+        except Exception:
+            return False
 
     def get_provider_info(self) -> Dict[str, Any]:
         """Gets detailed information about the Multipass provider."""
