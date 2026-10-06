@@ -72,7 +72,7 @@ class LocalBaseManager(CloudBaseManager, ABC):
                 return True
         return False
 
-    def upload_key(self, key_path: str, key_name: str) -> bool:
+    def upload_key(self, key_path: str, key_name: str, vm_name: Optional[str] = None) -> bool:
         """
         Uploads a public key to the local VM.
         Implementation: Appends the key to ~/.ssh/authorized_keys via run_command.
