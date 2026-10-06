@@ -16,6 +16,10 @@ class BaseVMProvider(ABC):
         """Validates the provider configuration. Returns a map of config paths to errors."""
         return {}
 
+    def normalize_vm_info(self, vm_info: Dict[str, Any]) -> Dict[str, Any]:
+        """Normalizes VM info keys to lowercase."""
+        return {k.lower(): v for k, v in vm_info.items()}
+
     def exists(self, name: str) -> bool:
         """Checks if a VM with the given name exists in the provider.
         Default implementation uses list() to verify existence.
@@ -24,9 +28,8 @@ class BaseVMProvider(ABC):
             vms = self.list()
             if not vms:
                 return False
-            # Check for name matches (case-insensitive and supporting common key names)
+            # Check for name matches (case-insensitive)
             return any(
-                str(vm.get("Name")).lower() == name.lower() or
                 str(vm.get("name")).lower() == name.lower()
                 for vm in vms if isinstance(vm, dict)
             )
