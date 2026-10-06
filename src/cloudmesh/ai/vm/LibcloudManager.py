@@ -88,9 +88,13 @@ class LibcloudManager(CloudBaseManager, ABC):
             if not node:
                 logger.error(f"VM {name} not found in {self.cloud_name}")
                 return False
+            if not hasattr(node, 'reboot'):
+                raise ProviderFeatureNotSupported(self.cloud_name, "restart")
             node.reboot()
             return True
         except Exception as e:
+            if isinstance(e, ProviderFeatureNotSupported):
+                raise e
             logger.error(f"Error restarting VM {name} in {self.cloud_name}: {e}")
             return False
 
@@ -105,9 +109,13 @@ class LibcloudManager(CloudBaseManager, ABC):
             if not node:
                 logger.error(f"VM {name} not found in {self.cloud_name}")
                 return False
+            if not hasattr(node, 'suspend'):
+                raise ProviderFeatureNotSupported(self.cloud_name, "suspend")
             node.suspend()
             return True
         except Exception as e:
+            if isinstance(e, ProviderFeatureNotSupported):
+                raise e
             logger.error(f"Error suspending VM {name} in {self.cloud_name}: {e}")
             return False
 
