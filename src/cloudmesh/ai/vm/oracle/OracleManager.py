@@ -192,9 +192,9 @@ class Provider(CloudBaseManager):
                     public_ip = vnic.public_ip
 
                 results.append({
-                    "Name": inst.display_name,
-                    "IP": public_ip,
-                    "Status": inst.lifecycle_state
+                    "name": inst.display_name,
+                    "ip": public_ip,
+                    "status": inst.lifecycle_state
                 })
             return results
         except Exception as e:

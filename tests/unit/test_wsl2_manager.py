@@ -69,8 +69,8 @@ def test_list_parsing(provider):
     provider._run_command.return_value = MagicMock(stdout=mock_output, returncode=0)
     vms = provider.list()
     assert len(vms) == 2
-    assert vms[0]["Name"] == "Ubuntu"
-    assert vms[0]["State"] == "Running"
+    assert vms[0]["name"] == "Ubuntu"
+    assert vms[0]["state"] == "Running"
     assert vms[1]["Name"] == "Debian"
 
 def test_login(provider):

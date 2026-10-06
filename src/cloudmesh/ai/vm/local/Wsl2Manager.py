@@ -110,9 +110,9 @@ class Provider(LocalBaseManager):
                     parts = parts[1:]
                 if len(parts) >= 2:
                     vms.append({
-                        "Name": parts[0],
-                        "State": parts[1],
-                        "Version": parts[2] if len(parts) > 2 else "Unknown"
+                        "name": parts[0],
+                        "state": parts[1],
+                        "version": parts[2] if len(parts) > 2 else "Unknown"
                     })
             return vms
         except Exception:

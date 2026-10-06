@@ -29,9 +29,9 @@ def test_wsl2_list_real_distributions(provider):
     distributions = provider.list()
     assert distributions
     for vm in distributions:
-        assert vm["Name"]
-        assert vm["State"]
-        assert vm["Version"]
+        assert vm["name"]
+        assert vm["state"]
+        assert vm["version"]
 
 def test_wsl2_exists_real_and_missing_distribution(provider, distro):
     assert provider.exists(distro) is True
