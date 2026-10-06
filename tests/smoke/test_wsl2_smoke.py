@@ -43,10 +43,14 @@ def test_wsl2_smoke():
     state = StateManager(config_file)
     provider = factory.create("wsl2", state.config)
 
-    vm_name = "smoke-test-wsl2"
+    # Use unique name based on cloud user and a random suffix
+    import uuid
+    cloud_config = provider.get_cloud_config("wsl2")
+    username = cloud_config.get("username", "user").replace("_", "-")
+    vm_name = f"smoke-{username}-{uuid.uuid4().hex[:6]}"
 
     try:
-        # 0. Cleanup any existing VM with the same name
+        # 0. Cleanup any existing VM with the same name (rare with UUID, but safe)
         print(f"Cleaning up existing WSL2 distro {vm_name} if it exists...")
         provider.delete(vm_name)
 

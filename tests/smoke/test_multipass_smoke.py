@@ -37,12 +37,17 @@ def test_multipass_smoke(temp_config):
     state = StateManager(temp_config)
     provider = factory.create("multipass", state.config)
     
-    vm_name = "smoke-test-vm"
-    
+    # Use unique name based on cloud user and a random suffix
+    import uuid
+    cloud_config = provider.get_cloud_config("multipass")
+    username = cloud_config.get("username", "user").replace("_", "-")
+    vm_name = f"smoke-{username}-{uuid.uuid4().hex[:6]}"
+
     try:
-        # 0. Cleanup any existing VM with the same name
+        # 0. Cleanup any existing VM with the same name (rare with UUID, but safe)
         print(f"Cleaning up existing VM {vm_name} if it exists...")
         provider.delete(vm_name)
+
 
 
         # 1. Start VM
