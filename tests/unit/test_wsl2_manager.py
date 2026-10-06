@@ -18,21 +18,24 @@ def mock_config():
 
 @pytest.fixture
 def provider(mock_config):
-    return Provider(mock_config)
+    provider = Provider(mock_config)
+    provider._wsl_command = MagicMock(return_value="wsl")
+    return provider
 
 def test_start_existing(provider):
-    with patch("subprocess.run") as mock_run:
-        # First call to list distros, second to start
-        mock_run.side_effect = [
-            MagicMock(stdout="Ubuntu-22.04\n", returncode=0),
-            MagicMock(stdout="Started", returncode=0)
-        ]
-        
+    with patch.object(provider, "exists", return_value=True), \
+         patch("subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(stdout="Started", returncode=0)
+
         result = provider.start(name="Ubuntu-22.04")
-        
+
         assert result == "Ubuntu-22.04"
-        mock_run.assert_any_call(["wsl", "--list"], capture_output=True, text=True, check=True)
-        mock_run.assert_any_call(["wsl", "-d", "Ubuntu-22.04"], capture_output=True, text=True, check=True)
+        mock_run.assert_called_once_with(
+            ["wsl", "-d", "Ubuntu-22.04"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
 
 def test_start_import(provider):
     with patch("subprocess.run") as mock_run:
