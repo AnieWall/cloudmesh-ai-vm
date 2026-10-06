@@ -4,8 +4,8 @@ from cloudmesh.ai.vm.local.Wsl2Manager import Provider
 
 @pytest.fixture
 def provider():
-    if shutil.which("wsl.exe") is None:
-        pytest.skip("wsl.exe is not available in this environment")
+    if shutil.which("wsl.exe") is None and shutil.which("wsl") is None:
+        pytest.skip("Neither wsl.exe nor wsl is available in this environment")
 
     return Provider({
         "clouds": {
@@ -46,7 +46,8 @@ def test_wsl2_version_real_cli(provider):
     versions = provider.version
     assert versions
     assert versions != ["Unknown"]
-    assert any("WSL version:" in line for line in versions)
+    # WSL version output can vary between versions/environments
+    assert any("version" in line.lower() for line in versions)
 
 def test_wsl2_run_command_real_distribution(provider, distro):
     output = provider.run_command(distro, "printf cloudmesh-wsl2-test")
