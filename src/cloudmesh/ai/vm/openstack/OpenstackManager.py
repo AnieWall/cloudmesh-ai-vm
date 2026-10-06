@@ -769,11 +769,12 @@ class OpenstackManager(CloudBaseManager):
             parts = result.split(';')
             for part in parts:
                 if 'floating' in part:
-                    # Extract a=1.2.3.4
-                    addr_part = part.split(',')
-                    for attr in addr_part:
-                        if attr.startswith('a='):
-                            return attr.split('=')[1]
+                    if ':' in part:
+                        val = part.split(':', 1)[1].strip()
+                        addr_parts = val.split(',')
+                        for attr in addr_parts:
+                            if attr.startswith('a='):
+                                return attr.split('=')[1]
             return None
         except Exception as e:
             from cloudmesh.ai.vm.logger import logger
