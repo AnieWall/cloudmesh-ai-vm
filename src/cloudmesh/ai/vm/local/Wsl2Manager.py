@@ -23,6 +23,17 @@ class Provider(LocalBaseManager):
             return "wsl"
         return "wsl.exe"
 
+    def _normalize_wsl_output(self, output: str) -> str:
+        """Normalize Windows-side WSL CLI output when called from WSL."""
+        if not output:
+            return ""
+        if "\x00" in output:
+            try:
+                return output.encode("utf-8").decode("utf-16le")
+            except Exception:
+                return output
+        return output
+
     def start(self, name: Optional[str] = None, flavor: Optional[str] = None, image: Optional[str] = None) -> str:
         """
         Starts a WSL2 distribution.
@@ -88,13 +99,15 @@ class Provider(LocalBaseManager):
         """
         try:
             result = self._run_command([self._get_wsl_binary(), "--list", "--verbose"])
-            lines = result.stdout.strip().split("\n")
+            lines = self._normalize_wsl_output(result.stdout).strip().splitlines()
             if len(lines) < 2:
                 return []
 
             vms = []
             for line in lines[1:]:
                 parts = line.split()
+                if parts and parts[0] == "*":
+                    parts = parts[1:]
                 if len(parts) >= 2:
                     vms.append({
                         "Name": parts[0],
@@ -206,7 +219,7 @@ class Provider(LocalBaseManager):
             raise VMResourceError(f"Distribution {name} not found")
         try:
             result = self._run_command([self._get_wsl_binary(), "--list", "--verbose"])
-            for line in result.stdout.splitlines():
+            for line in self._normalize_wsl_output(result.stdout).splitlines():
                 if name in line:
                     return {"RawInfo": line.strip()}
             raise VMResourceError(f"Distribution {name} not found in list")
@@ -232,11 +245,14 @@ class Provider(LocalBaseManager):
         """
         Checks if the requirements for this provider are met on the current system.
         """
-        import shutil
         import platform
         if platform.system() != "Windows":
             return False
-        return shutil.which("wsl") is not None
+
+        # Use our portable binary detection to see if any WSL executable is available
+        binary = self._get_wsl_binary()
+        import shutil
+        return shutil.which(binary) is not None
 
     def validate_config(self) -> Dict[str, List[str]]:
         """
