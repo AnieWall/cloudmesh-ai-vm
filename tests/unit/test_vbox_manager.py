@@ -71,10 +71,10 @@ def test_suspend_success(provider):
     provider._run_command.assert_any_call(["VBoxManage", "controlvm", "vbox-vm", "savestate"])
 
 def test_restart_success(provider):
-    # 1. For stop.exists() -> list()
-    # 2. For stop()
-    # 3. For start.exists() -> list()
-    # 4. For start()
+    # 1. stop.exists() -> list()
+    # 2. stop()
+    # 3. start.exists() -> list()
+    # 4. start()
     provider._run_command.side_effect = [
         MagicMock(stdout='"vbox-vm" {uuid1}\n', returncode=0),
         MagicMock(stdout="Stopped", returncode=0),

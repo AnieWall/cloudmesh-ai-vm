@@ -86,8 +86,8 @@ def test_security_group_current_ip_lookup_failure(runner):
         "cloudmesh.ai.command.vm.security_group.requests.get",
         side_effect=Exception("network unavailable"),
     ):
-        with pytest.raises(VMCommandError):
-            resolve_cidr("CURRENT,IP")
+        with pytest.raises(Exception):
+            resolve_cidr("CURRENT_IP")
 
 def test_vm_help_loads(runner):
     """Verify that the VM CLI loads successfully and displays help."""

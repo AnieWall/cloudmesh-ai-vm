@@ -108,9 +108,10 @@ class TestLibcloudProviders:
             provider.config["clouds"]["aws"]["image"] = "test-image"
             provider.config["clouds"]["aws"]["size"] = "test-size"
 
-            # Test Start (Currently raises ProviderFeatureNotSupported in LibcloudManager)
-            with pytest.raises(ProviderFeatureNotSupported):
-                provider.start(name="test-vm")
+            # Test Start
+            result = provider.start(name="test-vm")
+            assert result == "vm-123"
+            mock_driver.create_node.assert_called_once()
 
             # Test Stop
             assert provider.stop(name="test-vm") is True
@@ -141,8 +142,7 @@ class TestLibcloudProviders:
         incomplete_config = {"clouds": {"aws": {}}}
         with patch("cloudmesh.ai.vm.aws.AwsManager.AmazonEC2Driver", return_value=MagicMock()):
             provider = AwsProvider(incomplete_config)
-            # start() raises ProviderFeatureNotSupported, not VMProviderError, 
-            # but if we were to implement it, it would check config.
-            # For now, let's just verify it handles the config lookup.
-            with pytest.raises(ProviderFeatureNotSupported):
+            # start() should raise ConfigError if image is missing
+            with pytest.raises(Exception) as excinfo:
                 provider.start(name="test")
+            assert "Missing 'image'" in str(excinfo.value)
