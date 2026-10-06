@@ -124,3 +124,5 @@ The compliance suite also includes **Scenario Tests** (such as the "Zero-to-Hero
 ## Contributing
 
 See [Contributing](docs/contributing.md) for guidelines on adding new providers.
+
+**Note**: To be added to the `CONTRIBUTORS.md` file, please submit a separate Pull Request specifically for that purpose.
