@@ -128,11 +128,17 @@ class TestLibcloudProviders:
 
     def test_unsupported_methods(self, mock_driver):
         # Remove suspend/reboot from driver to test "not supported" logic
-        del mock_driver.suspend_node
-        del mock_driver.reboot_node
-        
+        # libcloud drivers might not have these methods, or the manager might handle them.
+        # If we want to test that ProviderFeatureNotSupported is raised,
+        # we must ensure the manager's implementation actually raises it.
+
         with patch("cloudmesh.ai.vm.aws.AwsManager.AmazonEC2Driver", return_value=mock_driver):
             provider = AwsProvider(MOCK_CONFIG)
+
+            # Ensure the driver does NOT have these methods to trigger the manager's exception
+            del mock_driver.suspend_node
+            del mock_driver.reboot_node
+
             with pytest.raises(ProviderFeatureNotSupported):
                 provider.suspend(name="test-vm")
             with pytest.raises(ProviderFeatureNotSupported):

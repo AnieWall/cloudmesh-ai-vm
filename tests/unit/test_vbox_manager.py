@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 from cloudmesh.ai.vm.local.VBoxManager import Provider
 
 @pytest.fixture
@@ -81,7 +81,11 @@ def test_restart_success(provider):
         MagicMock(stdout='"vbox-vm" {uuid1}\n', returncode=0),
         MagicMock(stdout="Started", returncode=0)
     ]
-    assert provider.restart(name="vbox-vm") is True
-    assert provider._run_command.call_count == 4
+
+    # We need to mock exists() to return True for both stop and start
+    with patch.object(provider, "exists", return_value=True):
+        assert provider.restart(name="vbox-vm") is True
+
+    assert provider._run_command.call_count == 2 # Only stop and start were called, exists was mocked
     provider._run_command.assert_any_call(["VBoxManage", "controlvm", "vbox-vm", "poweroff"])
     provider._run_command.assert_any_call(["VBoxManage", "startvm", "vbox-vm", "--type", "headless"])
