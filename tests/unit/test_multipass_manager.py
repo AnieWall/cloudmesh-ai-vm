@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import MagicMock
 from cloudmesh.ai.vm.local.MultipassManager import Provider
-from cloudmesh.ai.vm.exceptions import VMResourceError
+from cloudmesh.ai.vm.exceptions import VMResourceError, ProviderFeatureNotSupported
 
 @pytest.fixture
 def mock_config():
@@ -132,6 +132,5 @@ def test_getters(provider):
     assert "name" in keys[0]
 
     # Test security groups getter
-    sg = provider.get_security_groups()
-    assert isinstance(sg, list)
-    assert "name" in sg[0]
+    with pytest.raises(ProviderFeatureNotSupported):
+        provider.get_security_groups()
