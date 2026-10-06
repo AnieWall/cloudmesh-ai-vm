@@ -89,7 +89,7 @@ class TestOpenstackDetailed:
         # Note: because _run_cli_command is a mock, we need to handle the return values
         # But we can just mock the internal calls
         with patch.object(provider, "_run_cli_command") as mock_run:
-            mock_run.side_effect = ["ip-123", "Success", "1.2.3.4"]
+            mock_run.side_effect = ["ip-123", "Success", "network: a=10.0.0.1; floating: a=1.2.3.4,net-id=net1"]
             ip = provider.assign_floating_ip("test-vm")
             assert ip == "1.2.3.4"
             assert mock_run.call_count == 3

@@ -309,7 +309,8 @@ class OpenstackManager(CloudBaseManager):
             ])
 
             results = []
-            for line in output.strip().split("\n"):
+            lines = output.strip().split("\n")
+            for line in lines[1:]: # Skip header
                 if not line:
                     continue
                 parts = line.split("\t")
