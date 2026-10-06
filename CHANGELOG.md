@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.6.0] - 2026-10-05
+
+### Added
+- **Secret Masking**: Implemented a pattern-based redaction utility in `providers_utils.py` to mask sensitive data (tokens, passwords, API keys) in CLI error messages.
+- **WSL2 Portability**: Enhanced `Wsl2Manager` to automatically detect the most compatible binary (`wsl.exe` or `wsl`) for seamless operation across Windows CMD, PowerShell, Git Bash, and WSL-native environments.
+- **Documentation**: Updated the VM Management Manual to document the new WSL2 environment support.
+
+### Fixed
+- **Security Leakage**: Integrated secret masking into `OpenstackManager` to prevent credential exposure in `stderr` logs.
+- **Git Tracking**: Removed `cache-username.yaml` from version control and added it to `.gitignore`.
+
 ## [1.5.0] - 2026-10-02
 
 ### Added
@@ -11,7 +22,6 @@
 
 ### Changed
 - **Symlink Infrastructure**: Migrated `docs/CHANGELOG.md` and `docs/readme.md` to relative symbolic links to ensure compatibility with CI/CD environments.
-
 
 ## [1.3.0] - 2026-09-18
 
@@ -30,8 +40,6 @@
 - **CLI Output**: Removed debug messages from `cmc vm provider`.
 - **OpenStack Driver**: Enhanced `OpenstackManager` to dynamically retrieve and apply the `region` from `~/.config/openstack/clouds.yaml`.
 - **Libcloud Initialization**: Modified `LibcloudManager` to avoid hard failures during driver initialization when performing requirement checks.
-
-# Changelog
 
 ## [1.2.1] - 2026-09-18
 
@@ -84,8 +92,8 @@
     - `cmc vm start`: Launch a VM with automatic naming.
     - `cmc vm stop/delete/suspend/restart`: VM lifecycle management.
     - `cmc vm list`: List VMs in Table, JSON, YAML, or CSV formats.
-    - `cmc vm login`: Connect to VMs.
-    - `cmc vm reservation`: Hardware lease management for Chameleon Cloud (supports explicit dates or `--duration`).
+    - `cmx vm login`: Connect to VMs.
+    - `cmx vm reservation`: Hardware lease management for Chameleon Cloud (supports explicit dates or `--duration`).
 - **Testing**: Created comprehensive `pytest` suites for all providers using `unittest.mock`.
 
 ### Changed

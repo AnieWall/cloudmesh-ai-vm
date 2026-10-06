@@ -11,8 +11,9 @@ class VMContext:
     cloud_override: Optional[str] = None
     interactive: bool = False
 
-# Initialize StateManager with the default config path
-CONFIG_PATH = os.path.expanduser("~/.config/cloudmesh/clouds.yaml")
+# Initialize StateManager with the default config path or environment override
+DEFAULT_CONFIG_PATH = os.path.expanduser("~/.config/cloudmesh/clouds.yaml")
+CONFIG_PATH = os.environ.get("CLOUDMESH_VM_CONFIG", DEFAULT_CONFIG_PATH)
 state_manager = StateManager(CONFIG_PATH)
 
 class StateProxy:
