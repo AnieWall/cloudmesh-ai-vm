@@ -54,7 +54,7 @@ def start(ctx: click.Context, name: Optional[str] = None, count: Optional[int] =
             username = raw_username.replace("_", "-")
             counter = state.increment_counter()
             vms_to_start = [f"{username}-{counter}"]
-            console.print(f"No name, count, or range provided. Generating VM name: [bold blue]{vms_to_start[0]}[/bold blue]")
+            console.print(f"Generating VM name: [bold blue]{vms_to_start[0]}[/bold blue]")
 
     # Start the VMs
     started_vms = []
