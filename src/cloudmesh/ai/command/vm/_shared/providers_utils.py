@@ -15,11 +15,11 @@ def sanitize_output(text: str) -> str:
     # Patterns to redact: (Pattern, Replacement)
     patterns = [
         (r'(?i)(bearer\s+)[A-Za-z0-9\-\._~\+\/]+=*', r'\1[REDACTED]'),
-        (r'(?i)(api_key\s*=\s*)[^&\s]+', r'\1[REDACTED]'),
-        (r'(?i)(password\s*=\s*)[^&\s]+', r'\1[REDACTED]'),
-        (r'(?i)(secret\s*=\s*)[^&\s]+', r'\1[REDACTED]'),
-        (r'(?i)(token\s*=\s*)[^&\s]+', r'\1[REDACTED]'),
-        (r'(?i)(auth_token\s*=\s*)[^&\s]+', r'\1[REDACTED]'),
+        (r'(?i)(api_key\s*[:=]?\s*)[^&\s]+', r'\1[REDACTED]'),
+        (r'(?i)(password\s*[:=]?\s*)[^&\s]+', r'\1[REDACTED]'),
+        (r'(?i)(secret\s*[:=]?\s*)[^&\s]+', r'\1[REDACTED]'),
+        (r'(?i)(token\s*[:=]?\s*)[^&\s]+', r'\1[REDACTED]'),
+        (r'(?i)(auth_token\s*[:=]?\s*)[^&\s]+', r'\1[REDACTED]'),
     ]
 
     sanitized = text
