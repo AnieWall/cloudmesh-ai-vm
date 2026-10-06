@@ -27,46 +27,72 @@ def test_lima_cli_lifecycle(runner, config):
     result = runner.invoke(vm.vm_group, ["provider", "set", "lima"])
     assert result.exit_code == 0
 
-    # 3. start
-    vm_name = "smoke-lima-vm"
-    result = runner.invoke(vm.vm_group, ["start", vm_name])
+    # 3. start (without name - test auto-naming)
+    result = runner.invoke(vm.vm_group, ["start"])
     if result.exit_code != 0:
         pytest.skip(f"Lima start failed: {result.output}")
-    
-    # 4. list
-    result = runner.invoke(vm.vm_group, ["list"])
-    assert result.exit_code == 0
-    assert vm_name in result.output
 
-    # 5. stop
-    result = runner.invoke(vm.vm_group, ["stop", vm_name])
-    assert result.exit_code == 0
+    assert "Generating VM name" in result.output
 
-    # 6. delete
-    result = runner.invoke(vm.vm_group, ["delete", vm_name])
-    assert result.exit_code == 0
+    # Extract the generated VM name
+    import re
+    match = re.search(r"Successfully started VM ([\w-]+)", result.output)
+    if match:
+        vm_name = match.group(1)
+    else:
+        # Fallback for different output formats
+        vm_name = "smoke-lima-vm"
 
-    # 7. images
-    result = runner.invoke(vm.vm_group, ["image"])
-    assert result.exit_code == 0
+    try:
+        # 4. list
+        result = runner.invoke(vm.vm_group, ["list"])
+        assert result.exit_code == 0
+        assert vm_name in result.output
 
-    # 8. flavors
-    result = runner.invoke(vm.vm_group, ["flavor"])
-    assert result.exit_code == 0
+        # 5. stop
+        result = runner.invoke(vm.vm_group, ["stop", vm_name])
+        assert result.exit_code == 0
 
-    # 9. keys
-    result = runner.invoke(vm.vm_group, ["keys"])
-    assert result.exit_code == 0
+        # 6. delete
+        result = runner.invoke(vm.vm_group, ["delete", vm_name])
+        assert result.exit_code == 0
 
-    # 10. security_groups
-    result = runner.invoke(vm.vm_group, ["security_groups"])
-    assert result.exit_code == 0
+        # 7. images
+        result = runner.invoke(vm.vm_group, ["image"])
+        assert result.exit_code == 0
 
-    # 11. ssh_config
-    runner.invoke(vm.vm_group, ["start", vm_name])
-    result = runner.invoke(vm.vm_group, ["ssh_config"])
-    assert result.exit_code == 0
-    assert "Host" in result.output
-    
-    # Cleanup
+        # 8. flavors
+        result = runner.invoke(vm.vm_group, ["flavor"])
+        assert result.exit_code == 0
+
+        # 9. keys
+        result = runner.invoke(vm.vm_group, ["keys"])
+        assert result.exit_code == 0
+
+        # 10. security_groups
+        result = runner.invoke(vm.vm_group, ["security_groups"])
+        assert result.exit_code == 0
+
+        # 11. ssh_config
+        runner.invoke(vm.vm_group, ["start", vm_name])
+        result = runner.invoke(vm.vm_group, ["ssh_config"])
+        assert result.exit_code == 0
+        assert "Host" in result.output
+
+    finally:
+        # Cleanup: Always attempt to delete the VM
+        runner.invoke(vm.vm_group, ["delete", vm_name])
+
+def test_lima_cli_start_with_name(runner, config):
+    """
+    Test starting a Lima VM with a specific name.
+    """
+    vm_name = "test-named-lima-vm"
+    runner.invoke(vm.vm_group, ["delete", vm_name])
+
+    result = runner.invoke(vm.vm_group, ["start", vm_name])
+    if result.exit_code != 0:
+        pytest.skip("Lima start failed")
+
+    assert f"Successfully started VM {vm_name}" in result.output
     runner.invoke(vm.vm_group, ["delete", vm_name])

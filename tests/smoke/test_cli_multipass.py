@@ -34,8 +34,8 @@ def test_multipass_cli_lifecycle(runner, config):
     if result.exit_code != 0:
         # Multipass might not be installed in the test env, skip if so
         pytest.skip(f"Multipass start failed: {result.output}")
-    
-    assert "No name provided. Generating VM name" in result.output
+
+    assert "Generating VM name" in result.output
     # Verify the underscore was replaced by hyphen: smoke_test_user -> smoke-test-user
     assert "smoke-test-user-" in result.output
     

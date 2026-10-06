@@ -48,7 +48,16 @@ def test_multipass_smoke(temp_config):
         # 1. Start VM
         print(f"\nStarting VM {vm_name}...")
         provider.start(vm_name)
-        
+
+        # Verify it actually reaches Running state
+        print(f"Waiting for VM {vm_name} to reach Running state...")
+        assert provider.wait_for_status(vm_name, "Running", timeout=60) is True
+
+        # Test info
+        print(f"Fetching info for VM {vm_name}...")
+        info = provider.info(vm_name)
+        assert info is not None, f"Info for {vm_name} should not be None"
+
         # 2. List VM and verify it exists with retries
         print("Verifying VM in list...")
         import time
@@ -61,14 +70,19 @@ def test_multipass_smoke(temp_config):
             print(f"VM not found yet, retrying {i+1}/5...")
             time.sleep(2)
         assert vm_exists, f"VM {vm_name} should exist in the list"
-        
+
         # 3. Stop VM
         print(f"Stopping VM {vm_name}...")
         assert provider.stop(vm_name) is True, "Should successfully stop VM"
-        
+
+        # Verify it actually reaches Stopped state
+        print(f"Waiting for VM {vm_name} to reach Stopped state...")
+        assert provider.wait_for_status(vm_name, "Stopped", timeout=60) is True
+
         # 4. Delete VM
         print(f"Deleting VM {vm_name}...")
         assert provider.delete(vm_name) is True, "Should successfully delete VM"
+
         
         # 5. Verify VM is gone
         print("Verifying VM is deleted...")
