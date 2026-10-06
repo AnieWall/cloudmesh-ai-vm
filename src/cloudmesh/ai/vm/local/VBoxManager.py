@@ -199,6 +199,9 @@ class Provider(LocalBaseManager):
             "provider": "VirtualBox",
             "cloud_name": self.cloud_name,
             "version": self.version,
+            "config": {
+                "version": "VBoxManage",
+            },
         }
 
     def wait_for_status(self, name: str, target_status: str, timeout: int = 300) -> bool:

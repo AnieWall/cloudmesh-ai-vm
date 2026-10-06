@@ -334,10 +334,25 @@ class Provider(CloudBaseManager):
 
     def get_provider_info(self) -> Dict[str, Any]:
         """Gets detailed information about the Oracle provider."""
+        import subprocess
+
+        version = "OCI SDK"
+        try:
+            result = subprocess.run(["oci", "--version"], capture_output=True, text=True)
+            if result.returncode == 0:
+                version = result.stdout.strip()
+        except Exception:
+            pass
+
+        cloud_config = self.get_cloud_config(self.cloud_name)
         return {
             "provider": "Oracle",
             "cloud_name": self.cloud_name,
-            "version": "OCI SDK",
+            "version": version,
+            "config": {
+                "tenancy": cloud_config.get("tenancy"),
+                "region": cloud_config.get("region"),
+            },
         }
 
     def wait_for_status(self, name: str, target_status: str, timeout: int = 300) -> bool:

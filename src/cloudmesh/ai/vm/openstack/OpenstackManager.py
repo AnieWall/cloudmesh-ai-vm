@@ -293,40 +293,35 @@ class OpenstackManager(CloudBaseManager):
 
         # CLI Fallback
         try:
-            # openstack server list --format json
-            output = self._run_cli_command(["openstack", "server", "list", "--format", "json"])
-            import json
-            servers = json.loads(output)
-            
-            results = []
-            for s in servers:
-                # Extract Floating IP from addresses dictionary
-                # Addresses format: {"network_name": [{"addr": "1.2.3.4", "version": "ipv4"}]}
-                ip = "No IP"
-                addresses = s.get('addresses', {})
-                for net_name, addrs in addresses.items():
-                    # Floating IPs are usually in networks not containing 'private' or 'internal'
-                    if 'private' not in net_name.lower() and 'internal' not in net_name.lower():
-                        if addrs:
-                            ip = addrs[0].get('addr')
-                            break
-                
-                # Final fallback if no obvious public net was found
-                if ip == "No IP" and addresses:
-                    # Just take the first available IP if we can't distinguish
-                    first_net = list(addresses.values())[0]
-                    if first_net:
-                        ip = first_net[0].get('addr')
+            # openstack server list --format value -c Name -c ID -c Status -c Image -c Flavor -c Networks
+            output = self._run_cli_command([
+                "openstack",
+                "server",
+                "list",
+                "--format",
+                "value",
+                "-c", "Name",
+                "-c", "ID",
+                "-c", "Status",
+                "-c", "Image",
+                "-c", "Flavor",
+                "-c", "Networks",
+            ])
 
-                results.append({
-                    "name": s.get('Name', s.get('name', 'Unknown')), 
-                    "id": s.get('ID', s.get('id', 'Unknown')), 
-                    "status": s.get('Status', s.get('status', 'Unknown')), 
-                    "ip": ip,
-                    "image": s.get('Image', s.get('image', 'Unknown')),
-                    "flavor": s.get('Flavor', s.get('flavor', 'Unknown')),
-                    "networks": s.get('Networks', {})
-                })
+            results = []
+            for line in output.strip().split("\n"):
+                if not line:
+                    continue
+                parts = line.split("\t")
+                if len(parts) >= 6:
+                    results.append({
+                        "name": parts[0],
+                        "id": parts[1],
+                        "status": parts[2],
+                        "image": parts[3],
+                        "flavor": parts[4],
+                        "networks": parts[5],
+                    })
             return results
         except Exception as e:
             from cloudmesh.ai.vm.logger import logger
@@ -547,9 +542,26 @@ class OpenstackManager(CloudBaseManager):
         Gets detailed information for a specific security group using the CLI.
         """
         try:
-            import json
-            result_json = self._run_cli_command(["openstack", "security", "group", "show", name, "-f", "json"])
-            return json.loads(result_json)
+            result = self._run_cli_command([
+                "openstack",
+                "security",
+                "group",
+                "show",
+                name,
+                "-f",
+                "value",
+                "-c", "id",
+                "-c", "name",
+                "-c", "description",
+            ])
+            parts = result.strip().split("\t")
+            if len(parts) >= 3:
+                return {
+                    "id": parts[0],
+                    "name": parts[1],
+                    "description": parts[2],
+                }
+            return {"error": "Unexpected output format from CLI"}
         except Exception as e:
             from cloudmesh.ai.vm.logger import logger
             logger.error(f"Error getting security group info for {name}: {e}")
@@ -640,9 +652,36 @@ class OpenstackManager(CloudBaseManager):
     def list_security_group_rules(self, sg_name: str) -> List[Dict[str, Any]]:
         """Lists rules for a group."""
         try:
-            import json
-            result_json = self._run_cli_command(["openstack", "security", "group", "rule", "list", sg_name, "-f", "json"])
-            return json.loads(result_json)
+            result = self._run_cli_command([
+                "openstack",
+                "security",
+                "group",
+                "rule",
+                "list",
+                sg_name,
+                "-f",
+                "value",
+                "-c", "id",
+                "-c", "protocol",
+                "-c", "port_range_min",
+                "-c", "port_range_max",
+                "-c", "remote_ip",
+            ])
+
+            rules = []
+            for line in result.strip().split("\n"):
+                if not line:
+                    continue
+                parts = line.split("\t")
+                if len(parts) >= 5:
+                    rules.append({
+                        "id": parts[0],
+                        "protocol": parts[1],
+                        "port_range_min": parts[2],
+                        "port_range_max": parts[3],
+                        "remote_ip": parts[4],
+                    })
+            return rules
         except Exception as e:
             from cloudmesh.ai.vm.logger import logger
             logger.error(f"Error listing rules for {sg_name}: {e}")

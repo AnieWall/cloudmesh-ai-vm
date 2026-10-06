@@ -26,10 +26,15 @@ class Provider(LibcloudManager):
 
     def get_provider_info(self) -> Dict[str, Any]:
         """Gets detailed information about the Azure provider."""
+        cloud_config = self.get_cloud_config(self.cloud_name)
         return {
             "provider": "Azure",
             "cloud_name": self.cloud_name,
             "version": self.version,
+            "config": {
+                "subscription_id": cloud_config.get("subscription_id"),
+                "tenant_id": cloud_config.get("tenant_id"),
+            },
         }
 
     def wait_for_status(self, name: str, target_status: str, timeout: int = 300) -> bool:

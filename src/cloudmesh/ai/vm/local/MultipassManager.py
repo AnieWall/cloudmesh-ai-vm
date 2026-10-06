@@ -270,19 +270,15 @@ class Provider(LocalBaseManager):
         return self.start(name)
 
     def get_provider_info(self) -> Dict[str, Any]:
-        """Gets detailed information about the Multipass provider version."""
-        info = {}
-        try:
-            version_result = self._run_command(["multipass", "version"], stream=False)
-            if hasattr(version_result, "stdout") and version_result.stdout:
-                for line in version_result.stdout.strip().split("\n"):
-                    parts = line.strip().split()
-                    if len(parts) >= 2:
-                        info[parts[0]] = parts[1]
-        except Exception:
-            pass
-
-        return info
+        """Gets detailed information about the Multipass provider."""
+        return {
+            "provider": "Multipass",
+            "cloud_name": self.cloud_name,
+            "version": self.version,
+            "config": {
+                "image": self.get_cloud_config("multipass").get("image", "22.04"),
+            },
+        }
 
     def wait_for_status(self, name: str, target_status: str, timeout: int = 300) -> bool:
         """

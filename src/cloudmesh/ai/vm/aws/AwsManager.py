@@ -23,3 +23,39 @@ class Provider(LibcloudManager):
             region=cloud_config.get("region", "us-east-1")
         )
 
+    def get_provider_info(self) -> Dict[str, Any]:
+        """Gets detailed information about the AWS provider."""
+        import subprocess
+
+        version = "Unknown"
+        try:
+            result = subprocess.run(["aws", "--version"], capture_output=True, text=True)
+            if result.returncode == 0:
+                version = result.stdout.strip()
+        except Exception:
+            pass
+
+        cloud_config = self.get_cloud_config(self.cloud_name)
+        region = cloud_config.get("region", "us-east-1")
+
+        account_id = "Unknown"
+        try:
+            result = subprocess.run(
+                ["aws", "sts", "get-caller-identity", "--query", "Account", "--output", "text"],
+                capture_output=True, text=True
+            )
+            if result.returncode == 0:
+                account_id = result.stdout.strip()
+        except Exception:
+            pass
+
+        return {
+            "provider": "AWS",
+            "cloud_name": self.cloud_name,
+            "version": version,
+            "config": {
+                "region": region,
+                "account_id": account_id,
+            },
+        }
+
