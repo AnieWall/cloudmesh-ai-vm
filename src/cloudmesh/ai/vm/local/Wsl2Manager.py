@@ -235,7 +235,8 @@ class Provider(LocalBaseManager):
         """
         try:
             result = self._run_command([self._get_wsl_binary(), "--version"])
-            lines = result.stdout.strip().split("\n")
+            output = self._normalize_wsl_output(result.stdout)
+            lines = output.strip().split("\n")
             return [line.strip() for line in lines if ":" in line]
         except Exception:
             pass
@@ -245,11 +246,8 @@ class Provider(LocalBaseManager):
         """
         Checks if the requirements for this provider are met on the current system.
         """
-        import platform
-        if platform.system() != "Windows":
-            return False
-
-        # Use our portable binary detection to see if any WSL executable is available
+        # Use our portable binary detection to see if any WSL executable is available.
+        # This allows the provider to be detected even when running from inside WSL.
         binary = self._get_wsl_binary()
         import shutil
         return shutil.which(binary) is not None
