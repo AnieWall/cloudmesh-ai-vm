@@ -64,6 +64,14 @@ def test_multipass_smoke(temp_config):
             print(f"Waiting for VM {vm_name} to reach Running state...")
             assert provider.wait_for_status(vm_name, "Running", timeout=60) is True
 
+        # Connectivity check
+        with StopWatch.timer("multipass_connectivity"):
+            print(f"Checking connectivity for VM {vm_name}...")
+            hostname = provider.run_command(vm_name, "hostname")
+            assert hostname is not None and hostname != "" and "Error" not in hostname, \
+                f"Connectivity check failed for {vm_name}: {hostname}"
+            print(f"Connectivity check successful. Hostname: {hostname}")
+
         # Test info
         with StopWatch.timer("multipass_info"):
             print(f"Fetching info for VM {vm_name}...")

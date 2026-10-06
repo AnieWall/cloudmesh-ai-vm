@@ -251,9 +251,20 @@ class Provider(LocalBaseManager):
         """Multipass manages its own keys internally."""
         return [{"name": "multipass-default-key", "path": "~/.ssh/multipass_rsa"}]
 
-    def get_security_groups(self) -> List[Dict[str, Any]]:
-        """Multipass does not use security groups."""
-        return [{"name": "default", "description": "Local network access"}]
+    def run_command(self, name: str, cmd: str) -> str:
+        """
+        Executes a command on the Multipass VM.
+        """
+        if not name or not self.exists(name):
+            raise VMProviderError(f"VM {name} not found.")
+
+        try:
+            # multipass exec <vm> -- <command>
+            result = self._run_command(["multipass", "exec", name, "--", "sh", "-c", cmd])
+            return result.stdout
+        except Exception as e:
+            return f"Error executing command: {e}"
+
 
     def shelve(self, name: Optional[str] = None) -> bool:
         """

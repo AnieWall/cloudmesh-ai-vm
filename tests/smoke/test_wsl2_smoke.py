@@ -72,6 +72,15 @@ def test_wsl2_smoke():
             print(f"Waiting for WSL2 distro {vm_name} to reach Running state...")
             assert provider.wait_for_status(vm_name, "Running", timeout=60) is True
 
+        # Test connectivity
+        with StopWatch.timer("wsl2_connectivity"):
+            print(f"Checking connectivity for WSL2 distro {vm_name}...")
+            hostname = provider.run_command(vm_name, "hostname")
+            assert hostname is not None, "Hostname output should not be None"
+            assert hostname.strip() != "", "Hostname output should not be empty"
+            assert "Error" not in hostname, f"Hostname output contains Error: {hostname}"
+            print(f"Connectivity check passed. Hostname: {hostname.strip()}")
+
         # Test info
         with StopWatch.timer("wsl2_info"):
             print(f"Fetching info for WSL2 distro {vm_name}...")
