@@ -1,9 +1,13 @@
 import os
 import yaml
 import pytest
+import shutil
+import uuid
+import time
 from cloudmesh.ai.vm.state_manager import StateManager
 from cloudmesh.ai.vm.factory import factory
 from cloudmesh.ai.vm.local.MultipassManager import Provider as MultipassProvider
+from cloudmesh.ai.common.stopwatch import StopWatch
 
 # Register the provider in the factory for the test
 factory.register("multipass", MultipassProvider)
@@ -14,7 +18,7 @@ def temp_config(tmp_path):
     config_dir = tmp_path / ".config" / "cloudmesh"
     config_dir.mkdir(parents=True)
     config_file = config_dir / "clouds.yaml"
-    
+
     config_data = {
         "username": "smoke_test_user",
         "clouds": {
@@ -23,22 +27,21 @@ def temp_config(tmp_path):
             }
         }
     }
-    
+
     with open(config_file, "w") as f:
         yaml.dump(config_data, f)
-        
+
     return str(config_file)
 
 def test_multipass_smoke(temp_config):
     """
-    Smoke test for Multipass provider: 
+    Smoke test for Multipass provider:
     Start -> List -> Stop -> Delete
     """
     state = StateManager(temp_config)
     provider = factory.create("multipass", state.config)
-    
+
     # Use unique name based on cloud user and a random suffix
-    import uuid
     cloud_config = provider.get_cloud_config("multipass")
     username = cloud_config.get("username", "user").replace("_", "-")
     vm_name = f"smoke-{username}-{uuid.uuid4().hex[:6]}"
@@ -46,57 +49,71 @@ def test_multipass_smoke(temp_config):
     try:
         # 0. Cleanup any existing VM with the same name (rare with UUID, but safe)
         print(f"Cleaning up existing VM {vm_name} if it exists...")
-        provider.delete(vm_name)
-
-
+        try:
+            provider.delete(vm_name)
+        except Exception:
+            pass
 
         # 1. Start VM
-        print(f"\nStarting VM {vm_name}...")
-        provider.start(vm_name)
+        with StopWatch.timer("multipass_start"):
+            print(f"\nStarting VM {vm_name}...")
+            provider.start(vm_name)
 
         # Verify it actually reaches Running state
-        print(f"Waiting for VM {vm_name} to reach Running state...")
-        assert provider.wait_for_status(vm_name, "Running", timeout=60) is True
+        with StopWatch.timer("multipass_wait_running"):
+            print(f"Waiting for VM {vm_name} to reach Running state...")
+            assert provider.wait_for_status(vm_name, "Running", timeout=60) is True
 
         # Test info
-        print(f"Fetching info for VM {vm_name}...")
-        info = provider.info(vm_name)
-        assert info is not None, f"Info for {vm_name} should not be None"
+        with StopWatch.timer("multipass_info"):
+            print(f"Fetching info for VM {vm_name}...")
+            info = provider.info(vm_name)
+            assert info is not None, f"Info for {vm_name} should not be None"
 
         # 2. List VM and verify it exists with retries
-        print("Verifying VM in list...")
-        import time
-        vm_exists = False
-        for i in range(5):
-            vms = provider.list()
-            if any(vm.get("name") == vm_name for vm in vms):
-                vm_exists = True
-                break
-            print(f"VM not found yet, retrying {i+1}/5...")
-            time.sleep(2)
-        assert vm_exists, f"VM {vm_name} should exist in the list"
+        with StopWatch.timer("multipass_list"):
+            print("Verifying VM in list...")
+            vm_exists = False
+            for i in range(5):
+                vms = provider.list()
+                if any(vm.get("name") == vm_name for vm in vms):
+                    vm_exists = True
+                    break
+                print(f"VM not found yet, retrying {i+1}/5...")
+                time.sleep(2)
+            assert vm_exists, f"VM {vm_name} should exist in the list"
 
         # 3. Stop VM
-        print(f"Stopping VM {vm_name}...")
-        assert provider.stop(vm_name) is True, "Should successfully stop VM"
+        with StopWatch.timer("multipass_stop"):
+            print(f"Stopping VM {vm_name}...")
+            assert provider.stop(vm_name) is True, "Should successfully stop VM"
 
         # Verify it actually reaches Stopped state
-        print(f"Waiting for VM {vm_name} to reach Stopped state...")
-        assert provider.wait_for_status(vm_name, "Stopped", timeout=60) is True
+        with StopWatch.timer("multipass_wait_stopped"):
+            print(f"Waiting for VM {vm_name} to reach Stopped state...")
+            assert provider.wait_for_status(vm_name, "Stopped", timeout=60) is True
 
         # 4. Delete VM
-        print(f"Deleting VM {vm_name}...")
-        assert provider.delete(vm_name) is True, "Should successfully delete VM"
+        with StopWatch.timer("multipass_delete"):
+            print(f"Deleting VM {vm_name}...")
+            assert provider.delete(vm_name) is True, "Should successfully delete VM"
 
-        
         # 5. Verify VM is gone
-        print("Verifying VM is deleted...")
-        vms = provider.list()
-        vm_exists = any(vm.get("name") == vm_name for vm in vms)
-        assert not vm_exists, f"VM {vm_name} should be gone from the list"
-        
+        with StopWatch.timer("multipass_verify_deleted"):
+            print("Verifying VM is deleted...")
+            vms = provider.list()
+            vm_exists = any(vm.get("name") == vm_name for vm in vms)
+            assert not vm_exists, f"VM {vm_name} should be gone from the list"
+
         print("\nSmoke test passed successfully!")
-        
+
     finally:
+        # Print the benchmark results
+        StopWatch.benchmark(tag=f"Multipass Smoke {vm_name}")
+
         # Cleanup in case of failure
-        provider.delete(vm_name)
+        try:
+            if provider.exists(vm_name):
+                provider.delete(vm_name)
+        except Exception:
+            pass
