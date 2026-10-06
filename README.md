@@ -94,11 +94,20 @@ Full documentation is available in the `/docs` folder or hosted via GitHub Pages
 
 ## Testing
 
-The project includes a compliance suite to ensure all VM providers meet a minimum functional baseline.
+The project uses a tiered testing strategy to ensure stability across multiple cloud and local providers:
+
+### Testing Structure
+
+- `tests/unit`: **Unit Tests**. High-isolation tests that use mocks to verify internal logic and CLI behavior without requiring external infrastructure.
+- `tests/integration`: **Integration Tests**. End-to-end tests that perform real operations against actual cloud infrastructure.
+- `tests/compliance`: **Compliance Suite**. Ensures every provider implements a consistent interface and meets the minimum functional baseline. Includes "Scenario Tests" for end-to-end user flows.
+- `tests/smoke`: **Smoke Tests**. Quick, high-level checks to verify that the CLI and providers load and execute basic commands without crashing.
+- `tests/bin`: Utility scripts and helper binaries used by the test suite.
 
 ### Running Compliance Tests
 
 Tests can be run in two modes:
+
 
 - **Unit Mode (Default)**: Uses a standardized `MockDriver` to verify return types and basic logic without needing cloud credentials, ensuring a reliable functional baseline across all providers.
   ```bash
