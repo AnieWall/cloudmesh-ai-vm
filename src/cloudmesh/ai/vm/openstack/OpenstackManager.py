@@ -234,21 +234,26 @@ class OpenstackManager(CloudBaseManager):
 
     def wait_for_active(self, name: str, timeout: int = 300) -> bool:
         """
-        Waits for the VM to reach the 'active' state.
+        Waits for the VM to reach the 'active' or 'running' state.
         """
         import time
         from cloudmesh.ai.vm.logger import logger
 
-        logger.info(f"Waiting for VM {name} to become active...")
+        logger.info(f"Waiting for VM {name} to become active/running...")
         start_time = time.time()
         while time.time() - start_time < timeout:
             node = self._find_node(name)
             if node:
+                # Check libcloud state and OpenStack extra status
                 state = getattr(node, 'state', '').lower()
-                if state == 'active':
-                    logger.info(f"VM {name} is now active.")
+                extra = getattr(node, 'extra', {})
+                status = extra.get('status', '').lower()
+                vm_state = extra.get('vm_state', '').lower()
+
+                if state in ['active', 'running'] or status == 'active' or vm_state == 'active':
+                    logger.info(f"VM {name} is now active (state: {state}, status: {status}).")
                     return True
-                logger.debug(f"VM {name} is currently in state: {state}. Waiting...")
+                logger.debug(f"VM {name} is currently in state: {state}, status: {status}. Waiting...")
             else:
                 logger.debug(f"VM {name} not found yet. Waiting...")
 
