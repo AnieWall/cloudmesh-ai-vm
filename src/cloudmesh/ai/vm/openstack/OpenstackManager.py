@@ -19,9 +19,23 @@ class OpenstackManager(CloudBaseManager):
 
     def __init__(self, config: Any, cloud_name: Optional[str] = None, **kwargs):
         super().__init__(config, **kwargs)
+
+        # If cloud_name is not provided, try to infer it from the config
+        if not cloud_name:
+            # Check if 'jetstream' or 'chameleon' are in the config first
+            # as this class is the base for them.
+            clouds = getattr(config, "clouds", {}) if hasattr(config, "clouds") else {}
+            if not clouds and isinstance(config, dict):
+                clouds = config.get("clouds", {})
+
+            if "jetstream" in clouds:
+                cloud_name = "jetstream"
+            elif "chameleon" in clouds:
+                cloud_name = "chameleon"
+            else:
+                cloud_name = "openstack"
+
         self.cloud_name = cloud_name
-        if not self.cloud_name:
-            self.cloud_name = "openstack"
         self.driver = self._get_driver()
 
     def _get_driver(self):
@@ -69,7 +83,10 @@ class OpenstackManager(CloudBaseManager):
         app_cred_id = auth.get("application_credential_id") or cloud_config.get("application_credential_id")
         app_cred_secret = auth.get("application_credential_secret") or cloud_config.get("application_credential_secret")
         auth_url = auth.get("auth_url") or cloud_config.get("auth_url")
-        region_name = cloud_config.get("region_name", auth.get("region_name", "RegionOne"))
+
+        # Jetstream uses 'IU' as the region name
+        default_region = "IU" if self.cloud_name == "jetstream" else "RegionOne"
+        region_name = cloud_config.get("region_name", auth.get("region_name", default_region))
 
         if not all([app_cred_id, app_cred_secret, auth_url]):
             raise ConfigError(
@@ -80,6 +97,7 @@ class OpenstackManager(CloudBaseManager):
             )
 
         logger.debug(f"Initializing OpenStack driver for cloud '{self.cloud_name}' using application credentials.")
+        logger.debug(f"Auth URL: {auth_url}, Region: {region_name}")
         OpenStackDriver = get_driver(Provider.OPENSTACK)
         return OpenStackDriver(
             app_cred_id,
@@ -115,7 +133,7 @@ class OpenstackManager(CloudBaseManager):
 
         return result.stdout
 
-    def start(self, name: Optional[str] = None, flavor: Optional[str] = None, image: Optional[str] = None) -> str:
+    def start(self, name: Optional[str] = None, flavor: Optional[str] = None, image: Optional[str] = None, assign_ip: bool = True) -> str:
         """Starts a VM in OpenStack using libcloud."""
         cloud_config = self.get_cloud_config(self.cloud_name)
         image_name = image or cloud_config.get("image")
@@ -124,6 +142,9 @@ class OpenstackManager(CloudBaseManager):
         key_name = cloud_config.get("key_name")
         if not key_name and cloud_config.get("key_path"):
             key_name = Path(cloud_config["key_path"]).name.replace(".pub", "")
+
+        from cloudmesh.ai.vm.logger import logger
+        logger.debug(f"Using key_name: {key_name} (derived from config/clouds.yaml)")
 
         if not image_name:
             raise ConfigError(f"Missing 'image' in config for {self.cloud_name}")
@@ -172,11 +193,16 @@ class OpenstackManager(CloudBaseManager):
                 ex_keyname=key_name,
                 ex_security_groups=[sg],
             )
+
+            # Automatically assign a floating IP to make the VM reachable if requested
+            if assign_ip:
+                self.assign_floating_ip(vm_name)
+
             return node.id
         except Exception as e:
             from cloudmesh.ai.vm.logger import logger
-            logger.error(f"Libcloud start failed for {self.cloud_name}: {e}")
-            raise VMProviderError(f"Libcloud start failed for {self.cloud_name}: {e}") from e
+            logger.error(f"Libcloud start failed for {self.cloud_name} with key_name '{key_name}': {e}")
+            raise VMProviderError(f"Libcloud start failed for {self.cloud_name} (key_name: {key_name}): {e}") from e
 
     def wait_for_active(self, name: str, timeout: int = 300) -> bool:
         """
@@ -263,6 +289,11 @@ class OpenstackManager(CloudBaseManager):
 
                 state = getattr(node, 'state', '').lower()
                 try:
+                    # If the state is terminal Error, don't retry stop; it will never become ready.
+                    if state == 'error':
+                        logger.error(f"VM {name} is in ERROR state. Stop operation will not succeed.")
+                        raise VMProviderError(f"VM {name} is in ERROR state and cannot be stopped.")
+
                     # If the state is clearly transitional, wait before calling the API
                     if state in ['build', 'building']:
                         logger.warning(f"VM {name} is still building ({state}) (attempt {i+1}/{max_retries}). Waiting 5s...")
@@ -315,12 +346,15 @@ class OpenstackManager(CloudBaseManager):
             return False
 
     def delete(self, name: Optional[str] = None) -> bool:
-        """Deletes an OpenStack VM."""
+        """Deletes an OpenStack VM and releases its floating IP."""
         if not name or not self.exists(name):
             from cloudmesh.ai.vm.logger import logger
             logger.error(f"VM {name} not found in {self.cloud_name}")
             return False
         try:
+            # Release floating IP before deleting the VM to ensure it returns to the pool
+            self.release_floating_ip(name)
+
             node = self._find_node(name)
             if node:
                 self.driver.destroy_node(node)
@@ -825,46 +859,119 @@ class OpenstackManager(CloudBaseManager):
         """
         Internal helper to retrieve the floating IP address of a VM.
         """
-        try:
-            result = self._run_cli_command(["openstack", "server", "show", name, "--format", "value", "-c", "addresses"])
-            # Output is like: 'network: a=10.0.0.1,net-id=...; floating: a=1.2.3.4,net-id=...'
-            parts = result.split(';')
-            for part in parts:
-                if 'floating' in part:
-                    if ':' in part:
-                        val = part.split(':', 1)[1].strip()
-                        addr_parts = val.split(',')
-                        for attr in addr_parts:
-                            if attr.startswith('a='):
-                                return attr.split('=')[1]
-            return None
-        except Exception as e:
-            from cloudmesh.ai.vm.logger import logger
-            logger.debug(f"Could not find floating IP for {name}: {e}")
-            return None
+        node = self._find_node(name)
+        if node and getattr(node, 'public_ips', None):
+            return node.public_ips[0]
+        return None
+
+    def _wait_for_network(self, node, timeout: int = 300) -> bool:
+        """
+        Probes the VM until its private network interfaces are ready.
+        Returns True if private IPs are assigned, False otherwise.
+        """
+        import time
+        from cloudmesh.ai.vm.logger import logger
+
+        logger.info(f"Probing network readiness for VM {node.name}...")
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            # Refresh node state from driver
+            node = self._find_node(node.name)
+            if node and getattr(node, 'private_ips', None):
+                logger.info(f"Network is ready for {node.name} (Private IPs: {node.private_ips}).")
+                return True
+
+            state = getattr(node, 'state', 'unknown') if node else 'not found'
+            logger.info(f"Network not ready for {node.name} yet (State: {state}). Waiting 5s...")
+            time.sleep(5)
+
+        logger.error(f"Timeout reached waiting for network readiness for VM {node.name}.")
+        return False
 
     def assign_floating_ip(self, name: str) -> Optional[str]:
         """
         Assigns an available floating IP to the VM.
+        Tries to create a new one, falling back to available pools or existing free IPs.
+        Handles the case where the instance network is not ready yet by probing.
         """
         try:
-            # 1. Find a free floating IP
-            result = self._run_cli_command(["openstack", "floating", "ip", "list", "--status", "FREE", "--format", "value", "-c", "ID"])
-            free_ips = result.strip().split("\n")
-            if not free_ips or not free_ips[0]:
-                from cloudmesh.ai.vm.logger import logger
-                logger.warning("No free floating IPs available in the pool.")
+            from cloudmesh.ai.vm.logger import logger
+            import time
+
+            node = self._find_node(name)
+            if not node:
+                logger.error(f"VM {name} not found.")
                 return None
 
-            floating_ip_id = free_ips[0]
+            # Proactively probe for network readiness
+            network_ready = self._wait_for_network(node)
 
-            # 2. Associate it with the server
-            self._run_cli_command(["openstack", "server", "add", "floating", "ip", name, floating_ip_id])
+            fip = None
+            cloud_config = self.get_cloud_config(self.cloud_name)
+            # Use configured pool, or default to 'public'
+            pool_name = cloud_config.get("floating_ip_pool", "public")
 
-            return self._get_floating_ip(name)
+            try:
+                # 1. Try to create a floating IP using the specified or default pool
+                logger.debug(f"Attempting to create floating IP from pool '{pool_name}'...")
+                fip = self.driver.ex_create_floating_ip(ip_pool=pool_name)
+            except Exception as e:
+                err_msg = str(e)
+                if "pool not found" in err_msg.lower() or "404" in err_msg:
+                    logger.debug(f"Pool '{pool_name}' not found, trying to find any available pools...")
+                    pools = self.driver.ex_list_floating_ip_pools()
+                    if pools:
+                        try:
+                            # Try the first available pool found by the driver
+                            fallback_pool = getattr(pools[0], 'name', pools[0])
+                            logger.debug(f"Trying fallback pool '{fallback_pool}'...")
+                            fip = self.driver.ex_create_floating_ip(ip_pool=fallback_pool)
+                        except Exception as pool_e:
+                            logger.warning(f"Failed to create FIP from fallback pool {fallback_pool}: {pool_e}")
+                    else:
+                        logger.warning("No floating IP pools found on this cloud.")
+                else:
+                    logger.debug(f"Creation failed with error: {err_msg}. Trying fallback to existing IPs...")
+
+            if not fip:
+                # 2. Fallback: Try to find an existing FREE floating IP
+                logger.debug("Attempting to find an existing FREE floating IP...")
+                all_fips = self.driver.ex_list_floating_ips()
+                free_fips = [f for f in all_fips if not getattr(f, 'fixed_ip', None)]
+                if free_fips:
+                    fip = free_fips[0]
+                else:
+                    logger.warning("No free floating IPs available and could not create a new one.")
+
+            if fip:
+                # Attempt to attach the floating IP.
+                max_retries = 3
+                for i in range(max_retries):
+                    try:
+                        self.driver.ex_attach_floating_ip_to_node(node, fip)
+                        # Floating IP objects in libcloud OpenStack driver use 'ip' or 'ip_address'
+                        # We try 'ip' first, then 'ip_address' as a fallback.
+                        return getattr(fip, 'ip', getattr(fip, 'ip_address', 'Unknown IP'))
+                    except Exception as e:
+                        err_msg = str(e)
+                        if "Instance network is not ready yet" in err_msg:
+                            if not network_ready and i == max_retries - 1:
+                                logger.error(f"Network never became ready for {name}, and final attach attempt failed: {e}")
+                            elif i < max_retries - 1:
+                                logger.warning(f"Network still not ready for {name}, retrying in 5s... ({i+1}/{max_retries})")
+                                time.sleep(5)
+                                continue
+                        raise e
+
+            return None
+
         except Exception as e:
             from cloudmesh.ai.vm.logger import logger
-            logger.error(f"Error assigning floating IP to {name}: {e}")
+            err_msg = str(e)
+            if "quota" in err_msg.lower():
+                logger.error(f"Floating IP quota reached for cloud '{self.cloud_name}'.")
+            else:
+                logger.error(f"Error assigning floating IP to {name}: {e}")
             return None
 
     def release_floating_ip(self, name: str) -> bool:
@@ -872,27 +979,29 @@ class OpenstackManager(CloudBaseManager):
         Releases the floating IP associated with the VM.
         """
         try:
-            # 1. Find the floating IP
-            result = self._run_cli_command(["openstack", "server", "show", name, "--format", "value", "-c", "addresses"])
-            floating_ip_id = None
-            parts = result.split(';')
-            for part in parts:
-                if 'floating' in part:
-                    addr_part = part.split(',')
-                    for attr in addr_part:
-                        if 'net-id=' in attr:
-                            floating_ip_id = attr.split('=')[1]
-
-            if not floating_ip_id:
+            node = self._find_node(name)
+            if not node:
+                from cloudmesh.ai.vm.logger import logger
+                logger.error(f"VM {name} not found in {self.cloud_name}")
                 return False
 
-            # 2. Remove from server
-            self._run_cli_command(["openstack", "server", "remove", "floating", "ip", name, floating_ip_id])
+            # Find floating IPs
+            fips = getattr(node, 'public_ips', [])
+            if not fips:
+                return False
 
-            # 3. Delete the IP
-            self._run_cli_command(["openstack", "floating", "ip", "delete", floating_ip_id])
+            # We assume the first public IP is the floating IP to release
+            fip_address = fips[0]
+            fip = self.driver.ex_get_floating_ip(fip_address)
 
-            return True
+            if fip:
+                # Remove from server
+                self.driver.ex_detach_floating_ip_from_node(node, fip)
+                # Delete the IP
+                self.driver.ex_delete_floating_ip(fip)
+                return True
+
+            return False
         except Exception as e:
             from cloudmesh.ai.vm.logger import logger
             logger.error(f"Error releasing floating IP for {name}: {e}")
