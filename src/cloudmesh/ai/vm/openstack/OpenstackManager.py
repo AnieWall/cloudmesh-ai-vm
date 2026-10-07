@@ -83,6 +83,18 @@ class OpenstackManager(CloudBaseManager):
         app_cred_id = auth.get("application_credential_id") or cloud_config.get("application_credential_id")
         app_cred_secret = auth.get("application_credential_secret") or cloud_config.get("application_credential_secret")
         auth_url = auth.get("auth_url") or cloud_config.get("auth_url")
+        if auth_url:
+            auth_url = auth_url.rstrip("/")
+            if auth_url.endswith("/v3"):
+                auth_url = auth_url[:-3]
+            elif auth_url.endswith("/v3.0"):
+                auth_url = auth_url[:-5]
+        if auth_url:
+            auth_url = auth_url.rstrip("/")
+            if auth_url.endswith("/v3"):
+                auth_url = auth_url[:-3]
+            elif auth_url.endswith("/v3.0"):
+                auth_url = auth_url[:-5]
 
         # Jetstream uses 'IU' as the region name
         default_region = "IU" if self.cloud_name == "jetstream" else "RegionOne"
@@ -196,7 +208,18 @@ class OpenstackManager(CloudBaseManager):
 
             # Automatically assign a floating IP to make the VM reachable if requested
             if assign_ip:
-                self.assign_floating_ip(vm_name)
+                fip = self.assign_floating_ip(vm_name)
+                if fip:
+                    from cloudmesh.ai.vm.logger import logger
+                    logger.info(f"Floating IP {fip} assigned. Verifying SSH connectivity...")
+                    if self.wait_for_login(vm_name):
+                        logger.info(f"VM {vm_name} is reachable via SSH.")
+                    else:
+                        logger.warning(f"VM {vm_name} started but SSH login timed out.")
+                else:
+                    from cloudmesh.ai.vm.logger import logger
+                    logger.warning(f"Requested floating IP for {vm_name} but none could be assigned.")
+
 
             return node.id
         except Exception as e:
@@ -903,7 +926,11 @@ class OpenstackManager(CloudBaseManager):
                 logger.error(f"VM {name} not found.")
                 return None
 
-            # Proactively probe for network readiness
+            # Ensure the VM is active and network is ready before assigning FIP
+            if not self.wait_for_active(name):
+                logger.error(f"VM {name} failed to become active. Skipping floating IP assignment.")
+                return None
+
             network_ready = self._wait_for_network(node)
 
             fip = None
