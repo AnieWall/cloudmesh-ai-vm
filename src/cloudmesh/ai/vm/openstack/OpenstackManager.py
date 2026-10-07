@@ -589,45 +589,67 @@ class OpenstackManager(CloudBaseManager):
     def get_flavors(self) -> List[Dict[str, Any]]:
         """
         Lists available flavors in OpenStack.
-        Falls back to 'openstack flavor list' CLI if libcloud returns empty results.
+        Falls back to 'openstack flavor list' CLI if libcloud fails
+        or returns empty results.
         """
+        from cloudmesh.ai.vm.logger import logger
+
         try:
-            from cloudmesh.ai.vm.logger import logger
             logger.debug("Fetching flavors from OpenStack driver...")
             sizes = self.driver.list_sizes()
+
             if sizes:
                 logger.debug(f"Driver returned {len(sizes)} flavors.")
-                return [{"id": s.id, "name": s.name, "ram": s.ram, "vcpus": s.vcpus} for s in sizes]
+                return [
+                {
+                    "id": s.id,
+                    "name": s.name,
+                    "ram": s.ram,
+                    "vcpus": s.vcpus,
+                }
+                for s in sizes
+            ]
 
-            logger.debug("Driver returned no flavors. Falling back to 'openstack flavor list' CLI...")
-            # Use the helper method to benefit from region override and consistent env setup
-            result_stdout = self._run_cli_command(["openstack", "flavor", "list"])
+            logger.debug(
+            "Driver returned no flavors. "
+            "Falling back to 'openstack flavor list' CLI..."
+        )
 
-            # Parse the table output
-            lines = result_stdout.strip().split('\n')
+        except Exception as e:
+            logger.warning(
+            f"Libcloud flavor listing failed: {e}. "
+            "Trying CLI fallback..."
+        )
+
+        try:
+            result_stdout = self._run_cli_command([
+            "openstack",
+            "flavor",
+            "list",
+            ])
+
+            lines = result_stdout.strip().split("\n")
             if len(lines) < 3:
                 return []
-
             flavors = []
-            for line in lines[2:]: # Skip header and separator lines
-                if line.startswith('+') or not line.strip():
+            for line in lines[2:]:
+                if line.startswith("+") or not line.strip():
                     continue
-                # Split by '|', remove empty strings from edges
-                parts = [p.strip() for p in line.split('|') if p.strip()]
-                if len(parts) >= 5:
+
+                parts = [p.strip() for p in line.split("|") if p.strip()]
+                if len(parts) >= 6:
                     flavors.append({
-                        "id": parts[0],
-                        "name": parts[1],
-                        "ram": parts[2],
-                        "vcpus": parts[5]
-                    })
+                    "id": parts[0],
+                    "name": parts[1],
+                    "ram": parts[2],
+                    "vcpus": parts[5],
+                })
 
             logger.debug(f"CLI fallback returned {len(flavors)} flavors.")
             return flavors
 
         except Exception as e:
-            from cloudmesh.ai.vm.logger import logger
-            logger.error(f"Error getting flavors: {e}")
+            logger.error(f"Error getting flavors from CLI fallback: {e}")
             return []
 
     def get_keys(self) -> List[Dict[str, Any]]:

@@ -164,3 +164,40 @@ def test_get_provider_info_uses_supported_configuration_fields():
     assert info["cloud_name"] == "jetstream"
     assert info["region"] == "IU"
     assert info["auth_url"] == "https://example.invalid/v3/"    
+
+def test_get_flavors_falls_back_to_cli_when_libcloud_raises():
+    """Flavor discovery should use the OpenStack CLI when Libcloud fails."""
+    config = {"clouds": {"jetstream": {}}}
+
+    driver = MagicMock()
+    driver.list_sizes.side_effect = Exception("libcloud list_sizes failed")
+
+    cli_output = """\
++----+---------+------+-----+-----------+-------+-----------+
+| ID | Name    | RAM  | Disk| Ephemeral | VCPUs | Is Public |
++----+---------+------+-----+-----------+-------+-----------+
+| 1  | m3.tiny | 3072 | 20  | 0         | 1     | False     |
++----+---------+------+-----+-----------+-------+-----------+
+"""
+
+    with patch.object(OpenstackManager, "_get_driver", return_value=driver):
+        provider = OpenstackManager(config, cloud_name="jetstream")
+
+        with patch.object(
+            provider,
+            "_run_cli_command",
+            return_value=cli_output,
+        ) as run_cli:
+            flavors = provider.get_flavors()
+
+    run_cli.assert_called_once_with([
+        "openstack",
+        "flavor",
+        "list",
+    ])
+
+    assert len(flavors) == 1
+    assert flavors[0]["id"] == "1"
+    assert flavors[0]["name"] == "m3.tiny"
+    assert flavors[0]["ram"] == "3072"
+    assert flavors[0]["vcpus"] == "1"
