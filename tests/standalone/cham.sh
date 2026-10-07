@@ -141,7 +141,7 @@ openstack security group rule create --protocol tcp --dst-port 22 --remote-ip 0.
 
 echo "--- Step 6: Allocate Floating IP ---"
 # Try to find an existing DOWN floating IP first
-FIP_ADDR=$(openstack floating ip list -s DOWN -f value -c floating_ip_address | head -n 1)
+FIP_ADDR=$(openstack floating ip list --status DOWN -f value -c floating_ip_address | head -n 1)
 if [ -n "$FIP_ADDR" ]; then
     echo "Reusing existing FIP: $FIP_ADDR"
 else
