@@ -8,9 +8,10 @@ from ._shared.exceptions import handle_errors, VMCommandError
 @click.argument("name", required=False)
 @click.option("--count", type=int, help="Number of VMs to start")
 @click.option("--range", "vm_range", help="Range of VM indices to start (e.g. 1-5)")
+@click.option("--ip", type=click.Choice(['yes', 'no'], case_sensitive=False), default='yes', help="Whether to assign a floating IP (yes/no). Defaults to yes.")
 @vm_options
 @handle_errors
-def start(ctx: click.Context, name: Optional[str] = None, count: Optional[int] = None, vm_range: Optional[str] = None) -> None:
+def start(ctx: click.Context, name: Optional[str] = None, count: Optional[int] = None, vm_range: Optional[str] = None, ip: str = 'yes', cloud: str = None, debug: bool = False, verbose: bool = False) -> None:
     """
     Starts or launches VMs. 
     
@@ -68,7 +69,7 @@ def start(ctx: click.Context, name: Optional[str] = None, count: Optional[int] =
                 raise click.ClickException(f"VM [bold red]{vm_name}[/bold red] already exists. Please use a different name or 'stop' it first.")
 
     for vm_name in vms_to_start:
-        result = provider.start(name=vm_name)
+        result = provider.start(name=vm_name, assign_ip=(ip == 'yes'))
         if result:
             final_name = result if isinstance(result, str) else vm_name
             started_vms.append(final_name)
