@@ -289,8 +289,11 @@ class OpenstackManager(CloudBaseManager):
         except Exception:
             pass
 
-        nodes = self.driver.list_nodes()
-        return next((n for n in nodes if n.name == identifier or n.id == identifier), None)
+        try:
+            nodes = self.driver.list_nodes()
+            return next((n for n in nodes if n.name == identifier or n.id == identifier), None)
+        except Exception:
+            return None
 
     def exists(self, name: str) -> bool:
         """
