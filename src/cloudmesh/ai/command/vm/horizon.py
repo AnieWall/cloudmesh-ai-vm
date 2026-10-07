@@ -1,6 +1,6 @@
 import click
 import webbrowser
-from ._shared.context import VMContext
+from ._shared.context import VMContext, vm_options
 
 URL_MAP = {
     "CHI@TACC": "https://chi.tacc.chameleoncloud.org",
@@ -13,9 +13,10 @@ URL_MAP = {
 }
 
 @click.command()
+@vm_options
 @click.option("--site", type=click.Choice(list(URL_MAP.keys()), case_sensitive=False), help="Specify the cloud site")
 @click.pass_context
-def cmd(ctx: click.Context, site: str = None) -> None:
+def cmd(ctx: click.Context, site: str = None, cloud: str = None, debug: bool = False, verbose: bool = False) -> None:
     """Open the Horizon dashboard for the active cloud provider."""
     from ._shared.context import state
     

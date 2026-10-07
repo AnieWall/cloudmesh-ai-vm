@@ -23,8 +23,8 @@ class ProviderFactory:
             # that handles many providers via config.
             raise VMProviderError(f"Provider '{cloud_name}' is not registered in the factory.")
 
-        # Pass the GlobalConfig object itself, and the console, not its __dict__
-        return manager_cls(config, console=console)
+        # Pass the GlobalConfig object itself, the cloud_name, and the console
+        return manager_cls(config, cloud_name=cloud_name, console=console)
 
 # The factory is used as a singleton across the app
 factory = ProviderFactory()

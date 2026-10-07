@@ -22,29 +22,28 @@ def test_chameleon_cli_lifecycle(runner):
     assert result.exit_code == 0
 
     # 3. start
-    vm_name = "smoke-chameleon-vm"
+    vm_name = f"smoke-chameleon-vm-{uuid.uuid4().hex[:6]}"
     result = runner.invoke(vm.vm_group, ["start", vm_name])
     if result.exit_code != 0:
         print(f"DEBUG: Chameleon start failed with output: {result.output}")
         pytest.skip(f"Chameleon start failed: {result.output}")
 
     # Capture the actual VM name (which now includes site and username)
-    # The output is usually "VM smoke-chameleon-vm-tacc-gregor started" or similar
     import re
     match = re.search(r"VM ([\w-]+) started", result.output)
     if match:
         vm_name = match.group(1)
     else:
         # Fallback: try to find any name that looks like the requested one
-        # This is a bit brittle but helps if the output format changes slightly
         for word in result.output.split():
-            if vm_name in word and "-" in word:
+            if "smoke-chameleon-vm" in word and "-" in word:
                 vm_name = word.strip(".,!")
                 break
-    
+
     # 4. list
     result = runner.invoke(vm.vm_group, ["list"])
     assert result.exit_code == 0
+    assert vm_name in result.output
 
     # 5. stop
     result = runner.invoke(vm.vm_group, ["stop", vm_name])

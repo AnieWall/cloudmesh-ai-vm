@@ -21,31 +21,14 @@ def test_jetstream_smoke():
     Smoke test for Jetstream provider:
     Start -> List -> Stop -> Delete
     """
-    # We use a temporary config.
-    tmp_config_dir = os.path.expanduser("~/.config/cloudmesh_smoke")
-    os.makedirs(tmp_config_dir, exist_ok=True)
-    config_file = os.path.join(tmp_config_dir, "clouds.yaml")
+    # Use the real configuration instead of a temporary one
+    from cloudmesh.ai.command.vm._shared.context import state
+    config = state.config
+    try:
+        provider = factory.create("jetstream", config)
+    except Exception as e:
+        pytest.fail(f"Jetstream provider creation failed: {e}")
 
-    config_data = {
-        "username": "smoke_test_user",
-        "clouds": {
-            "jetstream": {
-                "auth_url": "https://jetstream.example.com",
-                "username": "smoke_user",
-                "password": "smoke_password",
-                "tenant_id": "smoke_tenant",
-                "region": "us-east-1",
-                "image": "ubuntu-22.04",
-                "flavor": "m1.small",
-            }
-        }
-    }
-
-    with open(config_file, "w") as f:
-        yaml.dump(config_data, f)
-
-    state = StateManager(config_file)
-    provider = factory.create("jetstream", state.config)
 
     # Use unique name based on cloud user and a random suffix
     cloud_config = provider.get_cloud_config("jetstream")
@@ -68,10 +51,15 @@ def test_jetstream_smoke():
             except Exception as e:
                 pytest.skip(f"Jetstream start failed (expected without real credentials): {e}")
 
-        # Verify it actually reaches Running state
-        with StopWatch.timer("jetstream_wait_running"):
-            print(f"Waiting for VM {vm_name} to reach Running state...")
-            assert provider.wait_for_status(vm_name, "Running", timeout=60) is True
+        # Readiness checks
+        with StopWatch.timer("jetstream_wait_active"):
+            print(f"Waiting for VM {vm_name} to become active...")
+            assert provider.wait_for_active(vm_name) is True, f"VM {vm_name} failed to become active"
+
+        with StopWatch.timer("jetstream_wait_login"):
+            print(f"Waiting for SSH login to be available on VM {vm_name}...")
+            assert provider.wait_for_login(vm_name) is True, f"SSH login not available on VM {vm_name}"
+
 
         # Test info
         with StopWatch.timer("jetstream_info"):

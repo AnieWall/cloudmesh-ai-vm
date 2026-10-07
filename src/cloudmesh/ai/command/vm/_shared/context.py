@@ -100,6 +100,9 @@ def resolve_vm_name(ctx: click.Context, name: Optional[str]) -> str:
 
 def vm_options(f):
     """Decorator to add common VM options."""
+    f = click.option("--cloud", callback=cloud_callback, help="Cloud provider override")(f)
+    f = click.option("--debug", is_flag=True, callback=debug_callback, help="Enable debug logging")(f)
+    f = click.option("--verbose", is_flag=True, callback=verbose_callback, help="Enable verbose output")(f)
     return f
 
 from rich.console import Console
