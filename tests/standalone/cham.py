@@ -19,6 +19,8 @@ import socket
 import subprocess
 import sys
 import time
+import traceback
+import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -26,6 +28,7 @@ import openstack
 
 TERMINAL_LEASE_STATES = {"ERROR", "FAILED", "TERMINATED", "DELETED"}
 
+FLAVOR="m1.medium"
 
 # --------------------------------------------------------------------------- #
 # Helpers
@@ -124,7 +127,7 @@ def create_flavor_lease(conn, blazar_url, name, flavor, count, hours) -> str:
         "events": [],
     }
 
-    log("📅", f"Creating flavor lease '{unique_name}': {count}x {flavor.name} for {hours}h (UTC end {payload['end_date']})")
+    log("", f"Creating flavor lease '{unique_name}': {count}x {flavor.name} for {hours}h (UTC end {payload['end_date']})")
     lease = blazar(conn, "POST", f"{blazar_url}/leases", json=payload).get("lease", {})
     lease_id = lease.get("id")
     if not lease_id:
@@ -134,7 +137,7 @@ def create_flavor_lease(conn, blazar_url, name, flavor, count, hours) -> str:
 
 
 def wait_for_lease(conn, blazar_url, lease_id, timeout=600, interval=10) -> dict:
-    log("⏳", f"Waiting for lease to become ACTIVE (up to {timeout}s)...")
+    log("", f"Waiting for lease to become ACTIVE (up to {timeout}s)...")
     deadline = time.time() + timeout
     last = None
     consecutive_failures = 0
@@ -147,7 +150,7 @@ def wait_for_lease(conn, blazar_url, lease_id, timeout=600, interval=10) -> dict
 
             status = lease.get("status", "").upper()
             if status != last:
-                log("   ↳", f"Lease status: {status}")
+                log("   ", f"Lease status: {status}")
                 last = status
             if status == "ACTIVE":
                 log("✅", "Lease is ACTIVE")
@@ -187,7 +190,7 @@ def get_reserved_flavor(conn, lease: dict):
     if not flavor:
         raise RuntimeError(f"Could not locate reserved flavor for reservation {res_id}")
 
-    log("📌", f"Reservation {res_id} -> reserved flavor '{flavor.name}' ({flavor.id})")
+    log("", f"Reservation {res_id} -> reserved flavor '{flavor.name}' ({flavor.id})")
     return res_id, flavor
 
 
@@ -200,7 +203,7 @@ def ensure_keypair(conn, name: str, pub_path: Path, tracker: Tracker) -> str:
         return name
     if not pub_path.is_file():
         die(f"Public key not found at {pub_path} (use --keyfile)")
-    log("🔑", f"Creating keypair '{name}' from {pub_path}")
+    log("", f"Creating keypair '{name}' from {pub_path}")
     conn.compute.create_keypair(name=name, public_key=pub_path.read_text().strip())
     tracker.created_keypair = name
     return name
@@ -240,7 +243,7 @@ def ensure_ssh_rule(conn, secgroup_name: str):
                 and (rule.port_range_min or 0) <= 22 <= (rule.port_range_max or 65535)
                 and rule.ether_type == "IPv4"):
             return sg
-    log("🛡️ ", f"Adding SSH (22/tcp) ingress rule to '{sg.name}'")
+    log(" ", f"Adding SSH (22/tcp) ingress rule to '{sg.name}'")
     conn.network.create_security_group_rule(
         security_group_id=sg.id, direction="ingress", ethertype="IPv4",
         protocol="tcp", port_range_min=22, port_range_max=22, remote_ip_prefix="0.0.0.0/0",
@@ -252,14 +255,14 @@ def get_floating_ip(conn, ext_net_name: str, tracker: Tracker):
     """Reuse an unassigned floating IP if one exists, otherwise allocate."""
     for fip in conn.network.ips():
         if fip.status == "DOWN" and not fip.port_id:
-            log("♻️ ", f"Reusing free floating IP {fip.floating_ip_address}")
+            log(" ", f"Reusing free floating IP {fip.floating_ip_address}")
             return fip
 
     ext = conn.network.find_network(ext_net_name) or next(
         (n for n in conn.network.networks() if n.is_router_external), None)
     if not ext:
         die(f"External network '{ext_net_name}' not found.")
-    log("🌐", f"Allocating floating IP from '{ext.name}'")
+    log("", f"Allocating floating IP from '{ext.name}'")
     fip = conn.network.create_ip(floating_network_id=ext.id)
     tracker.fip = fip  # only tracked for cleanup when *we* created it
     log("✅", f"Allocated {fip.floating_ip_address}")
@@ -272,7 +275,7 @@ def get_floating_ip(conn, ext_net_name: str, tracker: Tracker):
 def boot_server(conn, args, image, flavor, network, sg, keypair, reservation_id):
     max_boot_attempts = 10
     for boot_attempt in range(max_boot_attempts):
-        log("🚀", f"Booting '{args.name}' (Attempt {boot_attempt+1}/{max_boot_attempts}, flavor={flavor.name}, image={image.name})")
+        log("", f"Booting '{args.name}' (Attempt {boot_attempt+1}/{max_boot_attempts}, flavor={flavor.name}, image={image.name})")
 
         server = None
         try:
@@ -326,8 +329,8 @@ def boot_server(conn, args, image, flavor, network, sg, keypair, reservation_id)
                                 server_info = conn.compute.get_server(sid)
                                 fault = getattr(server_info, 'fault', None)
                                 if fault and (fault.get('code') == 500 or "No valid host" in str(fault.get('message', ''))):
-                                    log("🔍", f"NoValidHost detected: {fault.get('message')}")
-                                    log("♻️", "Retrying entire boot process to find a different host...")
+                                    log("", f"NoValidHost detected: {fault.get('message')}")
+                                    log("", "Retrying entire boot process to find a different host...")
                                     conn.compute.delete_server(sid)
                                     conn.compute.wait_for_delete(sid, wait=60)
                                     raise RuntimeError("NO_VALID_HOST")
@@ -356,7 +359,7 @@ def attach_floating_ip(conn, server, fip):
     if not ports:
         raise RuntimeError("Server has no ports; cannot attach floating IP")
     conn.network.update_ip(fip, port_id=ports[0].id)
-    log("🔗", f"Attached {fip.floating_ip_address} to {server.name}")
+    log("", f"Attached {fip.floating_ip_address} to {server.name}")
 
 
 def wait_for_port(ip: str, port: int = 22, timeout: int = 180) -> bool:
@@ -371,7 +374,7 @@ def wait_for_port(ip: str, port: int = 22, timeout: int = 180) -> bool:
 
 
 def test_ssh(user, ip, key: Path, command, timeout) -> bool:
-    log("🔐", f"Testing SSH to {user}@{ip} (running '{command}')")
+    log("", f"Testing SSH to {user}@{ip} (running '{command}')")
     if not key.is_file():
         log("⚠️ ", f"Private key {key} not found; skipping SSH test")
         return False
@@ -399,7 +402,7 @@ def test_ssh(user, ip, key: Path, command, timeout) -> bool:
 # Cleanup
 # --------------------------------------------------------------------------- #
 def cleanup(conn, blazar_url, t: Tracker):
-    log("🧹", "Cleaning up resources created by this run...")
+    log("", "Cleaning up resources created by this run...")
     try:
         if t.fip:
             conn.network.update_ip(t.fip, port_id=None)
@@ -409,25 +412,25 @@ def cleanup(conn, blazar_url, t: Tracker):
         try:
             conn.compute.delete_server(t.server, ignore_missing=True)
             conn.compute.wait_for_delete(t.server, wait=180)
-            log("   ↳", "Server deleted")
+            log("   ", "Server deleted")
         except Exception as e:
             log("⚠️ ", f"Server delete: {e}")
     if t.fip:
         try:
             conn.network.delete_ip(t.fip, ignore_missing=True)
-            log("   ↳", "Floating IP released")
+            log("   ", "Floating IP released")
         except Exception as e:
             log("⚠️ ", f"Floating IP delete: {e}")
     if t.created_keypair:
         try:
             conn.compute.delete_keypair(t.created_keypair, ignore_missing=True)
-            log("   ↳", "Keypair deleted")
+            log("   ", "Keypair deleted")
         except Exception as e:
             log("⚠️ ", f"Keypair delete: {e}")
     if t.lease_id:
         try:
             blazar(conn, "DELETE", f"{blazar_url}/leases/{t.lease_id}")
-            log("   ↳", "Lease deleted")
+            log("   ", "Lease deleted")
         except Exception as e:
             log("⚠️ ", f"Lease delete: {e}")
 
@@ -444,7 +447,7 @@ def parse_args():
     p.add_argument("--count", type=int, default=1, help="Number of instances to reserve")
     p.add_argument("--lease-id", help="Use an existing ACTIVE lease instead of creating one")
     p.add_argument("--image", default="CC-Ubuntu22.04")
-    p.add_argument("--flavor", default="m1.small", help="Base flavor to reserve")
+    p.add_argument("--flavor", default=FLAVOR, help="Base flavor to reserve")
     p.add_argument("--network", default="sharednet1")
     p.add_argument("--secgroup", default="default")
     p.add_argument("--keypair", default="chameleon-tmp-key")
@@ -457,18 +460,20 @@ def parse_args():
     p.add_argument("--lease-timeout", type=int, default=600, help="Seconds to wait for lease ACTIVE")
     p.add_argument("--ssh-timeout", type=int, default=180)
     p.add_argument("--cleanup", action="store_true", help="Tear down everything after the SSH test")
+    p.add_argument("--keep", action="store_true", help="Do not delete the VM on failure")
     return p.parse_args()
 
 
 def main():
     args = parse_args()
+    args.name = f"{args.name}-{uuid.uuid4().hex[:8]}"
     t = Tracker()
 
-    log("🔍", f"Connecting to '{args.cloud}'...")
+    log("", f"Connecting to '{args.cloud}'...")
     conn = get_connection(args.cloud)
-    log("📋", f"Region: {conn.config.region_name or 'unknown'}")
+    log("", f"Region: {conn.config.region_name or 'unknown'}")
     blazar_url = get_blazar_url(conn)
-    log("📋", f"Blazar endpoint: {blazar_url}")
+    log("", f"Blazar endpoint: {blazar_url}")
 
     ok = False
     try:
@@ -498,7 +503,7 @@ def main():
         if image.name.startswith("CC-"):
             user = "cc"
             if user != args.user:
-                log("👤", f"Image starts with 'CC-', automatically using user '{user}'")
+                log("", f"Image starts with 'CC-', automatically using user '{user}'")
 
         priv = Path(args.privkey)
         if not priv.is_file() and args.keyfile.endswith(".pub"):
@@ -522,6 +527,10 @@ def main():
         sys.exit(130)
     except Exception as exc:
         log("❌", f"Failed: {exc}")
+        # Print the full traceback for easier debugging
+        print("\n--- Traceback ---")
+        traceback.print_exc()
+        print("-----------------\n")
         cleanup(conn, blazar_url, t)
         sys.exit(1)
 
