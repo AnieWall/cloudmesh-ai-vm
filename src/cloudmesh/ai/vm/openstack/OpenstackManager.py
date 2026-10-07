@@ -388,15 +388,15 @@ class OpenstackManager(CloudBaseManager):
             from cloudmesh.ai.vm.logger import logger
             logger.warning(f"Libcloud list failed: {e}. Trying CLI fallback...")
 
-        # CLI Fallback
+                # CLI Fallback
         try:
-            # openstack server list --format value -c Name -c ID -c Status -c Image - c Flavor -c Networks
+            import json
             output = self._run_cli_command([
                 "openstack",
                 "server",
                 "list",
-                "--format",
-                "value",
+                "-f",
+                "json",
                 "-c", "Name",
                 "-c", "ID",
                 "-c", "Status",
@@ -405,22 +405,21 @@ class OpenstackManager(CloudBaseManager):
                 "-c", "Networks",
             ])
 
+            servers = json.loads(output)
+
             results = []
-            lines = output.strip().split("\n")
-            for line in lines[1:]: # Skip header
-                if not line:
-                    continue
-                parts = line.split("\t")
-                if len(parts) >= 6:
-                    results.append({
-                        "name": parts[0],
-                        "id": parts[1],
-                        "status": parts[2],
-                        "image": parts[3],
-                        "flavor": parts[4],
-                        "networks": parts[5],
-                    })
+            for server in servers:
+                results.append({
+                    "name": server.get("Name"),
+                    "id": server.get("ID"),
+                    "status": server.get("Status"),
+                    "image": server.get("Image"),
+                    "flavor": server.get("Flavor"),
+                    "networks": server.get("Networks"),
+                })
+
             return results
+
         except Exception as e:
             from cloudmesh.ai.vm.logger import logger
             logger.error(f"CLI list failed: {e}")

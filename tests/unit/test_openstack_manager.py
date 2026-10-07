@@ -164,3 +164,37 @@ def test_get_provider_info_uses_supported_configuration_fields():
     assert info["cloud_name"] == "jetstream"
     assert info["region"] == "IU"
     assert info["auth_url"] == "https://example.invalid/v3/"    
+
+def test_list_cli_fallback_returns_single_vm():
+    """The OpenStack CLI fallback should return a single VM when Libcloud listing fails."""
+    config = {"clouds": {"jetstream": {}}}
+
+    driver = MagicMock()
+    driver.list_nodes.side_effect = Exception("Libcloud list failed")
+
+    cli_output = """[
+        {
+            "Name": "test-vm",
+            "ID": "vm-123",
+            "Status": "SHUTOFF",
+            "Image": "ubuntu-test",
+            "Flavor": "m3.tiny",
+            "Networks": "test-network=10.0.0.5"
+        }
+    ]"""
+
+    with patch.object(OpenstackManager, "_get_driver", return_value=driver):
+        provider = OpenstackManager(config, cloud_name="jetstream")
+
+        with patch.object(
+            provider,
+            "_run_cli_command",
+            return_value=cli_output,
+        ):
+            vms = provider.list()
+
+    assert len(vms) == 1
+    assert vms[0]["name"] == "test-vm"
+    assert vms[0]["id"] == "vm-123"
+    assert vms[0]["status"] == "SHUTOFF"
+    assert vms[0]["flavor"] == "m3.tiny"
