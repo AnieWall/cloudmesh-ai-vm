@@ -206,6 +206,10 @@ class OpenstackManager(CloudBaseManager):
                 ex_security_groups=[sg],
             )
 
+            # Wait for the VM to actually be ACTIVE before proceeding to IP assignment
+            if not self.wait_for_active(vm_name):
+                raise VMProviderError(f"VM {vm_name} failed to become ACTIVE. Aborting start.")
+
             # Automatically assign a floating IP to make the VM reachable if requested
             if assign_ip:
                 fip = self.assign_floating_ip(vm_name)
@@ -219,6 +223,7 @@ class OpenstackManager(CloudBaseManager):
                 else:
                     from cloudmesh.ai.vm.logger import logger
                     logger.warning(f"Requested floating IP for {vm_name} but none could be assigned.")
+
 
 
             return node.id
