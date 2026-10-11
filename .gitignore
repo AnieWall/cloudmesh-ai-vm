@@ -1,3 +1,7 @@
+/fix_*.py
+/diagnose_*.py
+/inspect_*.py
+/verify_*.py
 tests/standalone/python-chi
 junk
 .report.html
