@@ -1,0 +1,3 @@
+[2026-10-11] - Refactor: Move inline import of re to top of file in OpenstackManager.py
+- Improved efficiency by moving the `re` module import to the module level instead of importing it within the `_get_floating_ip` method.
+Lifecycle Parity: Implement restart, suspend, and reset for AWS, Azure, and Google managers
