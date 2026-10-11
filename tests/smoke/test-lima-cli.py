@@ -3,6 +3,7 @@ from click.testing import CliRunner
 from cloudmesh.ai.command import vm
 from rich.text import Text
 from tests.smoke.cli_helper import setup_cli_config
+from tests.smoke.benchmark_helper import save_benchmark
 
 @pytest.fixture
 def runner():
@@ -84,6 +85,7 @@ def test_lima_cli_lifecycle(runner, config):
     finally:
         # Cleanup: Always attempt to delete the VM
         runner.invoke(vm.vm_group, ["delete", vm_name])
+        save_benchmark(tag=f"Lima CLI {vm_name}", config_path=None)
 
 def test_lima_cli_start_with_name(runner, config):
     """

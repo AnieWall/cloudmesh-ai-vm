@@ -67,7 +67,7 @@ def test_list_regions(provider):
 
         assert isinstance(regions, list)
         assert len(regions) >= 1
-        tacc_region = next((r for r in regions if r["name"] == "kvm@tacc"), None)
+        tacc_region = next((r for r in regions if r["name"] == "kvm@tacc"), None)∑∑∑∑
         assert tacc_region is not None
         assert tacc_region["description"] == "TACC KVM site"
 

@@ -4,6 +4,7 @@ from rich.text import Text
 from click.testing import CliRunner
 from cloudmesh.ai.command import vm
 from tests.smoke.cli_helper import setup_cli_config
+from tests.smoke.benchmark_helper import save_benchmark
 
 @pytest.fixture
 def runner():
@@ -71,6 +72,7 @@ def test_wsl2_cli_lifecycle(runner, config):
     finally:
         # Cleanup
         runner.invoke(vm.vm_group, ["delete", vm_name])
+        save_benchmark(tag=f"WSL2 CLI {vm_name}", config_path=None)
 
 def test_wsl2_cli_start_with_name(runner, config):
     """

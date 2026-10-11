@@ -31,16 +31,20 @@ def save_benchmark(tag, config_path):
 
     # Username from config
     try:
-        with open(config_path, "r") as cf:
-            config = yaml.safe_load(cf)
-            username = config.get("username")
-            if not username:
-                raise RuntimeError("Username not set in config file")
-            username = username.replace("cloudmesh-", "")
+        if config_path and os.path.exists(config_path):
+            with open(config_path, "r") as cf:
+                config = yaml.safe_load(cf)
+                username = config.get("username")
+                if not username:
+                    raise RuntimeError("Username not set in config file")
+                username = username.replace("cloudmesh-", "")
+        else:
+            username = "unknown-user"
     except Exception as e:
         if isinstance(e, RuntimeError):
-            raise e
-        raise RuntimeError(f"Failed to read config file: {e}")
+            username = "unknown-user"
+        else:
+            username = "unknown-user"
 
     # Date
     now = datetime.datetime.now()
@@ -48,7 +52,7 @@ def save_benchmark(tag, config_path):
     date_short = now.strftime("%Y%m%d")
 
     # 3. Write to file
-    results_dir = "results"
+    results_dir = "results/smoke"
     os.makedirs(results_dir, exist_ok=True)
 
     # Sanitize tag for filename (use - instead of _ to match requested example)

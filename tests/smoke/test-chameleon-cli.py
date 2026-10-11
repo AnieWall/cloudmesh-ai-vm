@@ -3,6 +3,7 @@ import uuid
 from click.testing import CliRunner
 from cloudmesh.ai.command import vm
 from tests.smoke.cli_helper import setup_cli_config
+from tests.smoke.benchmark_helper import save_benchmark
 
 @pytest.fixture
 def runner():
@@ -100,3 +101,8 @@ def test_chameleon_cli_lifecycle(runner):
     #result = runner.invoke(vm.vm_group, ["reservation", "smoke-res", "--node-type", "gpu", "--count", "1"])
     #if result.exit_code != 0:
     #    pytest.skip("Chameleon reservation failed")
+
+    # Note: In CLI tests, we don't have a direct temp_config path like in lifecycle tests.
+    # We use a dummy path or try to find the config path from setup_cli_config.
+    # For now, we'll use a placeholder as the benchmark_helper might just need it for the username.
+    save_benchmark(tag=f"Chameleon CLI {vm_name}", config_path=None)
