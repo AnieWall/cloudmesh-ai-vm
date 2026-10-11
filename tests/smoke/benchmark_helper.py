@@ -6,11 +6,38 @@ from io import StringIO
 from contextlib import redirect_stdout
 import yaml
 
+def get_results_username(config_path: Optional[str] = None) -> str:
+    """
+    Determines the username for result filenames.
+    Only uses ~/.config/cloudmesh/clouds.yaml.
+    If not found, raises a RuntimeError asking the user to set it.
+    """
+    # Try ~/.config/cloudmesh/clouds.yaml
+    global_config_path = os.path.expanduser("~/.config/cloudmesh/clouds.yaml")
+    try:
+        if os.path.exists(global_config_path):
+            with open(global_config_path, "r") as cf:
+                config = yaml.safe_load(cf)
+                if config and isinstance(config, dict):
+                    username = config.get("username")
+                    if username:
+                        return username.replace("cloudmesh-", "")
+    except Exception:
+        pass
+
+    # No fallback to config_path or 'unknown-user' as per user request
+    raise RuntimeError(
+        "Username is missing from the global configuration file ~/.config/cloudmesh/clouds.yaml. "
+        "Please set the 'username' field in the YAML file to run benchmarks."
+    )
+
+
 def save_benchmark(tag, config_path):
     """
     Captures the output of StopWatch.benchmark and saves it to a file in the results directory.
     """
     from cloudmesh.ai.common.stopwatch import StopWatch
+
 
     # 1. Capture the benchmark output
     f = StringIO()
@@ -30,21 +57,7 @@ def save_benchmark(tag, config_path):
         git_data = {}
 
     # Username from config
-    try:
-        if config_path and os.path.exists(config_path):
-            with open(config_path, "r") as cf:
-                config = yaml.safe_load(cf)
-                username = config.get("username")
-                if not username:
-                    raise RuntimeError("Username not set in config file")
-                username = username.replace("cloudmesh-", "")
-        else:
-            username = "unknown-user"
-    except Exception as e:
-        if isinstance(e, RuntimeError):
-            username = "unknown-user"
-        else:
-            username = "unknown-user"
+    username = get_results_username(config_path)
 
     # Date
     now = datetime.datetime.now()
