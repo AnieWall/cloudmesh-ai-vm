@@ -1,4 +1,6 @@
 import pytest
+import re
+from rich.text import Text
 from click.testing import CliRunner
 from cloudmesh.ai.command import vm
 from tests.smoke.cli_helper import setup_cli_config
@@ -40,9 +42,8 @@ def test_multipass_cli_lifecycle(runner, config):
     assert "smoke-test-user-" in result.output
 
     # Extract the generated VM name for subsequent steps
-    import re
-    clean_output = re.sub(r'\x1b\[[0-9;]*m', '', result.output)
-    match = re.search(r"Successfully started VM ([\w-]+)", clean_output)
+    output = Text.from_ansi(result.output).plain
+    match = re.search(r"Successfully started VM ([\w-]+)", output)
     vm_name = match.group(1) if match else "smoke-test-user"
 
     try:
@@ -94,5 +95,5 @@ def test_multipass_cli_start_with_name(runner, config):
         pytest.skip("Multipass start failed")
 
     # Use a more flexible check for the success message to avoid ANSI color issues
-    assert f"Successfully started VM {vm_name}" in result.output.replace("\x1b[1;32m", "").replace("\x1b[0m", "")
+    assert f"Successfully started VM {vm_name}" in Text.from_ansi(result.output).plain
     runner.invoke(vm.vm_group, ["delete", vm_name])
