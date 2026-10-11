@@ -5,6 +5,8 @@ import json
 from io import StringIO
 from contextlib import redirect_stdout
 import yaml
+from cloudmesh.ai.common.stopwatch import StopWatch
+from cloudmesh.ai.common.sys import systeminfo
 
 def get_results_username(config_path: Optional[str] = None) -> str:
     """
@@ -36,17 +38,21 @@ def save_benchmark(tag, config_path):
     """
     Captures the output of StopWatch.benchmark and saves it to a file in the results directory.
     """
-    from cloudmesh.ai.common.stopwatch import StopWatch
 
+    # 1. Collect Metadata
+    # Username from config
+    username = get_results_username(config_path)
 
-    # 1. Capture the benchmark output
+    # Capture the benchmark output
     f = StringIO()
     with redirect_stdout(f):
+        # Call systeminfo before benchmark and set user=results_username
+        import yaml
+        print(yaml.dump(systeminfo(user=username), default_flow_style=False))
         # Call benchmark without a tag to collect all recorded timers for this session
-        StopWatch.benchmark()
+        StopWatch.benchmark(sysinfo=False)
     benchmark_output = f.getvalue()
 
-    # 2. Collect Metadata
     # Git info
     try:
         branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], text=True).strip()
@@ -56,9 +62,6 @@ def save_benchmark(tag, config_path):
     except Exception:
         git_info = "Git info unavailable"
         git_data = {}
-
-    # Username from config
-    username = get_results_username(config_path)
 
     # Date and Time
     now = datetime.datetime.now()
