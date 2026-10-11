@@ -15,13 +15,13 @@ class Provider(LocalBaseManager):
         super().__init__(config, console=console, **kwargs)
         self.cloud_name = "wsl2"
 
-    def _get_wsl_binary(self) -> str:
+    def _get_wsl_binary(self) -> Optional[str]:
         """Return the most portable WSL binary for the current environment."""
         if shutil.which("wsl.exe"):
             return "wsl.exe"
         if shutil.which("wsl"):
             return "wsl"
-        return "wsl.exe"
+        return None
 
     def _normalize_wsl_output(self, output: str) -> str:
         """Normalize Windows-side WSL CLI output when called from WSL."""
@@ -29,9 +29,13 @@ class Provider(LocalBaseManager):
             return ""
         if "\x00" in output:
             try:
-                return output.encode("utf-8").decode("utf-16le")
+                # Attempt to decode as UTF-16LE, common for wsl.exe output in some contexts
+                decoded = output.encode("utf-8").decode("utf-16le")
+                # Basic sanity check: if it's mostly non-printable, it might have been a false positive
+                if any(c.isprintable() for c in decoded):
+                    return decoded
             except Exception:
-                return output
+                pass
         return output
 
     def start(self, name: Optional[str] = None, flavor: Optional[str] = None, image: Optional[str] = None, **kwargs) -> str:
@@ -187,12 +191,23 @@ class Provider(LocalBaseManager):
             self.print("Error: 'wsl_username' and 'host_username' must be configured in clouds.yaml to link SSH directory.")
             return False
 
-        host_ssh_path = f"/mnt/c/Users/{host_user}/.ssh"
+        # Try to determine host SSH path. Default to /mnt/c/Users but allow config override.
+        host_base = cloud_config.get("host_ssh_base", "/mnt/c/Users")
+        host_ssh_path = f"{host_base}/{host_user}/.ssh"
         wsl_ssh_path = f"/home/{wsl_user}/.ssh"
 
         try:
-            shell_command = f"rm -rf {wsl_ssh_path} && ln -s {host_ssh_path} {wsl_ssh_path}"
-            self._run_command([self._get_wsl_binary(), "-d", name, "-u", "root", "sh", "-c", shell_command])
+            # Use 'ln -sf' to replace existing symlinks, but avoid 'rm -rf' on directories to prevent data loss.
+            # First, check if it's a directory and not a link.
+            check_cmd = f"[ -d {wsl_ssh_path} ] && [ ! -L {wsl_ssh_path} ] && echo 'exists'"
+            check_result = self._run_command([self._get_wsl_binary() or "wsl.exe", "-d", name, "-u", "root", "sh", "-c", check_cmd])
+
+            if "exists" in check_result:
+                self.print(f"Warning: {wsl_ssh_path} exists and is a directory. Skipping symlink to prevent data loss.")
+                return False
+
+            shell_command = f"ln -sf {host_ssh_path} {wsl_ssh_path}"
+            self._run_command([self._get_wsl_binary() or "wsl.exe", "-d", name, "-u", "root", "sh", "-c", shell_command])
             return True
         except Exception:
             return False
@@ -217,16 +232,14 @@ class Provider(LocalBaseManager):
         """Gets detailed information about a WSL2 distribution."""
         if not name or not self.exists(name):
             raise VMResourceError(f"Distribution {name} not found")
-        try:
-            result = self._run_command([self._get_wsl_binary(), "--list", "--verbose"])
-            for line in self._normalize_wsl_output(result.stdout).splitlines():
-                if name in line:
-                    return {"RawInfo": line.strip()}
-            raise VMResourceError(f"Distribution {name} not found in list")
-        except VMResourceError:
-            raise
-        except Exception as e:
-            raise VMProviderError(f"Error getting info for distribution {name}: {e}")
+
+        # Reuse list() to get the distributions and their states.
+        vms = self.list()
+        for vm in vms:
+            if vm["name"] == name:
+                return {"Name": vm["name"], "State": vm["state"], "Version": vm["version"]}
+
+        raise VMResourceError(f"Distribution {name} not found in list")
 
     @property
     def version(self) -> List[str]:
@@ -255,8 +268,8 @@ class Provider(LocalBaseManager):
     def _get_current_status(self, name: str) -> str:
         """Returns the current status of the WSL2 distribution."""
         vms = self.list()
-        vm = next((v for v in vms if v["Name"] == name), None)
-        return vm["State"] if vm else ""
+        vm = next((v for v in vms if v["name"] == name), None)
+        return vm["state"] if vm else ""
 
     def validate_config(self) -> Dict[str, List[str]]:
         """
