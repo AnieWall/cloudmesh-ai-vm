@@ -8,7 +8,7 @@ from cloudmesh.ai.vm.exceptions import ConfigError, VMResourceError, VMAuthError
 class OpenstackManager(CloudBaseManager):
     """
     Base Manager for OpenStack-based clouds.
-    Implements common OpenStack VM operations using libcloud.
+    Implements common OpenStack VM operations using OpenStack SDK.
     """
 
     def __init__(self, config: Any, cloud_name: Optional[str] = None, **kwargs):
