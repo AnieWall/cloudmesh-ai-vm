@@ -69,11 +69,14 @@ def vm_group(ctx: click.Context, interactive: bool = False) -> None:
     ctx.obj = VMContext()
 
     os_cloud = os.environ.get("OS_CLOUD")
-    if not os_cloud:
-        raise click.ClickException("OS_CLOUD environment variable is not set. Please set it to specify the cloud provider (e.g., export OS_CLOUD=my-cloud).")
-
     active_cloud = ctx.obj.cloud_override or os_cloud
-    console.print(f"Running on cloud: [bold blue]{active_cloud}[/bold blue]")
+
+    # We only enforce OS_CLOUD for commands that actually need a target cloud.
+    # Commands like 'provider list' should be allowed without it.
+    # Since we are in the group callback, we'll check if the command being called requires it.
+    # For now, we'll allow it to be None and let the specific command handle the error if needed.
+    if active_cloud:
+        console.print(f"Running on cloud: [bold blue]{active_cloud}[/bold blue]")
 
     if interactive:
         console.print("[bold green]Entering interactive VM shell. Type 'exit' or 'quit' to leave.[/bold green]")

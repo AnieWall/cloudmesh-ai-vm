@@ -86,7 +86,7 @@ def test_lima_cli_lifecycle(runner, config):
     finally:
         # Cleanup: Always attempt to delete the VM
         runner.invoke(vm.vm_group, ["delete", vm_name], env=env)
-        save_benchmark(tag=f"Lima CLI {vm_name}", config_path=None)
+        save_benchmark(tag="Lima CLI", config_path=None)
 
 def test_lima_cli_start_with_name(runner, config):
     """

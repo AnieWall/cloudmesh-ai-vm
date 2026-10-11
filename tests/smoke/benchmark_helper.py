@@ -42,7 +42,8 @@ def save_benchmark(tag, config_path):
     # 1. Capture the benchmark output
     f = StringIO()
     with redirect_stdout(f):
-        StopWatch.benchmark(tag=tag)
+        # Call benchmark without a tag to collect all recorded timers for this session
+        StopWatch.benchmark()
     benchmark_output = f.getvalue()
 
     # 2. Collect Metadata
@@ -59,13 +60,17 @@ def save_benchmark(tag, config_path):
     # Username from config
     username = get_results_username(config_path)
 
-    # Date
+    # Date and Time
     now = datetime.datetime.now()
     date_str = now.strftime("%Y-%m-%d %H:%M:%S")
-    date_short = now.strftime("%Y%m%d")
+    date_short = now.strftime("%Y-%m-%d")
+    time_short = now.strftime("%H-%M")
+
 
     # 3. Write to file
-    results_dir = "results/smoke"
+    # Ensure results are saved to the project root's results/smoke directory
+    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    results_dir = os.path.join(base_dir, "results", "smoke")
     os.makedirs(results_dir, exist_ok=True)
 
     # Sanitize tag for filename (use - instead of _ to match requested example)
@@ -75,9 +80,9 @@ def save_benchmark(tag, config_path):
     # to ensure the filename ends with -<username>-<date>
     timestamp = now.strftime("%H%M%S")
 
-    # Format: <safe_tag>-<timestamp>-<username>-<date>
-    # This ensures it ends with -<username>-<date> as requested
-    filename_base = f"{safe_tag}-{timestamp}-{username}-{date_short}"
+    # Format: <safe_tag>-<username>-<date>--<time>
+    # This ensures it ends with -<username>-<date>--<time> as requested
+    filename_base = f"{safe_tag}-{username}-{date_short}--{time_short}".lower()
 
     # Text version
     txt_filename = f"{filename_base}.txt"

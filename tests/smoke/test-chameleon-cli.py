@@ -105,4 +105,4 @@ def test_chameleon_cli_lifecycle(runner):
     # Note: In CLI tests, we don't have a direct temp_config path like in lifecycle tests.
     # We use a dummy path or try to find the config path from setup_cli_config.
     # For now, we'll use a placeholder as the benchmark_helper might just need it for the username.
-    save_benchmark(tag=f"Chameleon CLI {vm_name}", config_path=None)
+    save_benchmark(tag="Chameleon CLI", config_path=None)

@@ -109,7 +109,7 @@ def test_jetstream_cli_lifecycle(runner, config):
     finally:
         # Cleanup
         runner.invoke(vm.vm_group, ["delete", vm_name])
-        save_benchmark(tag=f"Jetstream CLI {vm_name}", config_path=None)
+        save_benchmark(tag="Jetstream CLI", config_path=None)
 
 def test_jetstream_cli_start_with_name(runner, config):
     """

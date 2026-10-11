@@ -72,7 +72,7 @@ def test_wsl2_cli_lifecycle(runner, config):
     finally:
         # Cleanup
         runner.invoke(vm.vm_group, ["delete", vm_name])
-        save_benchmark(tag=f"WSL2 CLI {vm_name}", config_path=None)
+        save_benchmark(tag="WSL2 CLI", config_path=None)
 
 def test_wsl2_cli_start_with_name(runner, config):
     """

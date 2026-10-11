@@ -288,6 +288,30 @@ class Provider(LocalBaseManager):
         """Lima uses port forwarding instead of security groups."""
         return [{"name": "default", "description": "Local port forwarding"}]
 
+    def get_ssh_config(self, name: Optional[str] = None) -> Optional[str]:
+        """
+        Generates an SSH configuration entry for a Lima VM.
+        """
+        if not name:
+            # Try to get the last used VM if no name provided
+            from cloudmesh.ai.command.vm._shared.context import state
+            name = state.get_last_vm(self.cloud_name)
+            if not name:
+                return None
+
+        if not self.exists(name):
+            return None
+
+        try:
+            # Use limactl to get the SSH config
+            # limactl show-ssh-config <name>
+            result = self._run_command(["limactl", "show-ssh-config", name], stream=False)
+            if result.stdout:
+                return result.stdout.strip()
+            return None
+        except Exception:
+            return None
+
     def check_requirements(self) -> bool:
         """
         Checks if the requirements for this provider are met on the current system.

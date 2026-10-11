@@ -72,7 +72,7 @@ def test_vbox_cli_lifecycle(runner, config):
     finally:
         # Cleanup
         runner.invoke(vm.vm_group, ["delete", vm_name])
-        save_benchmark(tag=f"VBox CLI {vm_name}", config_path=None)
+        save_benchmark(tag="VBox CLI", config_path=None)
 
 def test_vbox_cli_start_with_name(runner, config):
     """
