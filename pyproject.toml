@@ -56,3 +56,9 @@ aws = "cloudmesh.ai.vm.aws.AwsManager:Provider"
 azure = "cloudmesh.ai.vm.azure.AzureManager:Provider"
 google = "cloudmesh.ai.vm.google.GoogleManager:Provider"
 oracle = "cloudmesh.ai.vm.oracle.OracleManager:Provider"
+
+[tool.pytest.ini_options]
+markers = [
+    "compliance: mark test as a compliance test",
+]
+

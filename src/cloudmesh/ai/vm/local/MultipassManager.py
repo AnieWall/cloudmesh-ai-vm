@@ -60,11 +60,14 @@ class Provider(LocalBaseManager):
         command.append(str(vm_image))
 
         try:
-            self._run_command(command, stream=True)
+            result = self._run_command(command, stream=True)
+            if not name:
+                match = re.search(r"Launched:\s+(\S+)", result.stdout)
+                name = match.group(1) if match else "multipass-generated"
         except Exception as e:
             raise VMProviderError(f"Failed to launch Multipass VM: {e}")
 
-        return name if name else "multipass-generated"
+        return name
 
     def stop(self, name: Optional[str] = None) -> bool:
         """Stops a Multipass VM."""
@@ -83,8 +86,7 @@ class Provider(LocalBaseManager):
             raise VMResourceError(f"VM {name} not found in multipass.")
 
         try:
-            self._run_command(["multipass", "delete", name])
-            self._run_command(["multipass", "purge"])
+            self._run_command(["multipass", "delete", "--purge", name])
             return True
         except Exception as e:
             raise VMProviderError(f"Error deleting VM {name}: {e}")
@@ -111,13 +113,27 @@ class Provider(LocalBaseManager):
         This is a provider-level operation and ignores the name parameter.
         """
         import platform
+        import os
         if platform.system() != "Darwin":
             self.print("Daemon reset via launchctl is only supported on macOS.")
             return False
+
+        self.print("Resetting Multipass daemon...")
+        if os.geteuid() == 0:
+            cmd = ["launchctl", "kickstart", "-k", "system/com.canonical.multipassd"]
+        else:
+            # Try non-interactive sudo first to avoid hanging in CI/scripts
+            try:
+                self._run_command(["sudo", "-n", "launchctl", "kickstart", "-k", "system/com.canonical.multipassd"])
+                return True
+            except Exception:
+                if not os.isatty(0):
+                    self.print("Error: sudo privileges are required to reset the Multipass daemon, but no TTY is available for password entry.")
+                    return False
+                cmd = ["sudo", "launchctl", "kickstart", "-k", "system/com.canonical.multipassd"]
+
         try:
-            self.print("Resetting Multipass daemon...")
-            # Use sudo to kickstart the Multipass background service on macOS
-            self._run_command(["sudo", "launchctl", "kickstart", "-k", "system/com.canonical.multipassd"])
+            self._run_command(cmd)
             return True
         except Exception as e:
             self.print(f"Error resetting Multipass daemon: {e}")
@@ -134,24 +150,16 @@ class Provider(LocalBaseManager):
     def list(self) -> List[Dict[str, Any]]:
         """Lists all Multipass VMs."""
         try:
-            result = self._run_command(["multipass", "list"], stream=False)
-            lines = result.stdout.strip().splitlines()
-            if not lines or len(lines) < 2:
-                return []
-
+            import json
+            result = self._run_command(["multipass", "list", "--format", "json"], stream=False)
+            data = json.loads(result.stdout)
             vms = []
-            # Skip the header line
-            for line in lines[1:]:
-                # Multipass output is usually columns. We split by whitespace.
-                parts = re.split(r'\s+', line.strip(), maxsplit=3)
-                if parts and parts[0] == "*":
-                    parts = parts[1:]
-                if len(parts) >= 3:
-                    vms.append({
-                        "name": parts[0],
-                        "status": parts[1],
-                        "ip": parts[2] if parts[2] != "-" else "None"
-                    })
+            for item in data.get("list", []):
+                vms.append({
+                    "name": item.get("name"),
+                    "status": item.get("state"),
+                    "ip": item.get("ipv4", [None])[0] if item.get("ipv4") else "None"
+                })
             return vms
         except Exception as e:
             raise VMProviderError(f"Error listing Multipass VMs: {e}")
@@ -225,9 +233,12 @@ class Provider(LocalBaseManager):
             with open(key_path, "r") as f:
                 pub_key = f.read().strip()
 
-            # command: multipass exec <vm> -- bash -c "mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo '<key> # <name>' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+            escaped_key = pub_key.replace("'", "'\\''")
+            escaped_name = key_name.replace("'", "'\\''")
+
+            # command: multipass exec <vm> -- bash -c "mkdir -p ~/.ssh && chmod 700 ~/.ssh && printf '%s\n' '<key> # <name>' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
             cmd = ["multipass", "exec", vm_name, "--", "bash", "-c",
-                   f"mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo '{pub_key} # {key_name}' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"]
+                   f"mkdir -p ~/.ssh && chmod 700 ~/.ssh && printf '%s\\n' '{escaped_key} # {escaped_name}' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"]
 
             self._run_command(cmd)
             self.print(f"Successfully uploaded key {key_name} to VM {vm_name}")
@@ -244,10 +255,15 @@ class Provider(LocalBaseManager):
         if not vm_name:
             self.print("Error: delete_key requires a vm_name for Multipass.")
             return False
+        if not key_name:
+            self.print("Error: delete_key requires a key_name.")
+            return False
 
         try:
-            # Use sed to remove the line containing the key name/identifier
-            cmd = ["multipass", "exec", vm_name, "--", "bash", "-c", f"sed -i '/{key_name}/d' ~/.ssh/authorized_keys"]
+            # Escape for sed regex and the delimiter /
+            escaped_key_name = re.escape(key_name).replace("/", r"\/")
+            # Use argument passing to bash -c to avoid shell injection
+            cmd = ["multipass", "exec", vm_name, "--", "bash", "-c", "sed -i \"/$1/d\" ~/.ssh/authorized_keys", "bash", escaped_key_name]
             self._run_command(cmd)
             self.print(f"Successfully deleted key {key_name} from VM {vm_name}")
             return True

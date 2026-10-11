@@ -1,4 +1,5 @@
 import pytest
+import re
 from unittest.mock import MagicMock
 from cloudmesh.ai.vm.local.MultipassManager import Provider
 from cloudmesh.ai.vm.exceptions import VMResourceError, ProviderFeatureNotSupported
@@ -35,6 +36,16 @@ def test_start_with_name_and_config(provider):
     assert result == vm_name
 
 def test_start_without_name(provider):
+    # Mock Multipass list output for exists()
+    mock_list_result = MagicMock(stdout='{"list": []}')
+
+    def side_effect(command, **kwargs):
+        if command == ["multipass", "list", "--format", "json"]:
+            return mock_list_result
+        return MagicMock()
+
+    provider._run_command.side_effect = side_effect
+
     result = provider.start()
 
     expected_command = ["multipass", "launch", "-c", "2", "-m", "4GiB", "-d", "20GiB", "22.04"]
@@ -42,14 +53,14 @@ def test_start_without_name(provider):
         expected_command,
         stream=True
     )
-    assert result == "multipass-generated"
+    assert result != "multipass-generated"
 
 def test_stop_success(provider):
     # Mock Multipass list output for exists()
     mock_list_result = MagicMock(stdout="Name State IPv4 Image\ntest-vm Running 192.168.64.5 Ubuntu 22.04 LTS\n")
 
     def side_effect(command, **kwargs):
-        if command == ["multipass", "list"]:
+        if command == ["multipass", "list", "--format", "json"]:
             return mock_list_result
         return MagicMock()
 
@@ -63,7 +74,7 @@ def test_stop_failure(provider):
     mock_list_result = MagicMock(stdout="Name State IPv4 Image\n")
 
     def side_effect(command, **kwargs):
-        if command == ["multipass", "list"]:
+        if command == ["multipass", "list", "--format", "json"]:
             return mock_list_result
         return MagicMock()
 
@@ -77,15 +88,14 @@ def test_delete_success(provider):
     mock_list_result = MagicMock(stdout="Name State IPv4 Image\ntest-vm Running 192.168.64.5 Ubuntu 22.04 LTS\n")
 
     def side_effect(command, **kwargs):
-        if command == ["multipass", "list"]:
+        if command == ["multipass", "list", "--format", "json"]:
             return mock_list_result
         return MagicMock()
 
     provider._run_command.side_effect = side_effect
 
     assert provider.delete(name="test-vm") is True
-    provider._run_command.assert_any_call(["multipass", "delete", "test-vm"])
-    provider._run_command.assert_any_call(["multipass", "purge"])
+    provider._run_command.assert_any_call(["multipass", "delete", "--purge", "test-vm"])
 
 def test_list_parsing(provider):
     # Mock Multipass output
@@ -109,7 +119,7 @@ def test_restart_success(provider):
     mock_list_result = MagicMock(stdout="Name State IPv4 Image\ntest-vm Running 192.168.64.5 Ubuntu 22.04 LTS\n")
 
     def side_effect(command, **kwargs):
-        if command == ["multipass", "list"]:
+        if command == ["multipass", "list", "--format", "json"]:
             return mock_list_result
         return MagicMock()
 
@@ -134,3 +144,43 @@ def test_getters(provider):
     # Test security groups getter
     with pytest.raises(ProviderFeatureNotSupported):
         provider.get_security_groups()
+
+def test_upload_key_escaping(provider, tmp_path):
+    # Create a dummy public key file with a single quote
+    key_content = "ssh-rsa AAAAB3Nza... 'quote' ... user@host"
+    key_file = tmp_path / "id_rsa.pub"
+    key_file.write_text(key_content)
+
+    key_name = "my'key'name"
+    vm_name = "test-vm"
+
+    assert provider.upload_key(str(key_file), key_name, vm_name) is True
+
+    # Verify the command constructed uses the robust escaping pattern
+    # Expected: pub_key' -> pub_key'\'' and key_name' -> key_name'\''
+    escaped_key = key_content.replace("'", "'\\''")
+    escaped_name = key_name.replace("'", "'\\''")
+    expected_cmd_part = f"mkdir -p ~/.ssh && chmod 700 ~/.ssh && printf '%s\\n' '{escaped_key} # {escaped_name}' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+
+    provider._run_command.assert_called_with([
+        "multipass", "exec", vm_name, "--", "bash", "-c", expected_cmd_part
+    ])
+
+def test_delete_key_escaping(provider):
+    key_name = "my/key'name"
+    vm_name = "test-vm"
+
+    assert provider.delete_key(key_name, vm_name) is True
+
+    # Verify the command constructed:
+    # 1. key_name is escaped for sed regex and / delimiter
+    # 2. key_name is passed as a positional argument to bash -c
+    escaped_key_name = re.escape(key_name).replace("/", r"\/")
+    expected_cmd = [
+        "multipass", "exec", vm_name, "--", "bash", "-c",
+        "sed -i \"/$1/d\" ~/.ssh/authorized_keys",
+        "bash",
+        escaped_key_name
+    ]
+
+    provider._run_command.assert_called_with(expected_cmd)
