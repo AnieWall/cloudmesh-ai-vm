@@ -1,5 +1,8 @@
 import re
+import time
+import shutil
 from typing import List, Dict, Any, Optional
+from cloudmesh.ai.vm.logger import logger
 from ..LocalBaseManager import LocalBaseManager
 from cloudmesh.ai.vm.exceptions import VMProviderError, VMResourceError, ConfigError
 
@@ -8,6 +11,8 @@ class Provider(LocalBaseManager):
     VirtualBox implementation of the CloudBaseManager.
     Uses the 'VBoxManage' CLI tool to manage local VMs.
     """
+
+    STATE_PATTERN = re.compile(r"State:\s+([a-zA-Z]+)")
 
     def start(self, name: Optional[str] = None, flavor: Optional[str] = None, image: Optional[str] = None, **kwargs) -> str:
         """
@@ -66,15 +71,16 @@ class Provider(LocalBaseManager):
             vms = []
             for line in lines:
                 # VBoxManage list vms output format: "VM Name" {uuid}
-                match = re.match(r'"([^"]+)"\s+\{([^}]+)\}', line)
+                # Use a greedy match for the name to handle names with quotes.
+                match = re.match(r'^"(.+)"\s+\{([a-f0-9-]+)\}$', line)
                 if match:
                     vms.append({
                         "name": match.group(1),
                         "uuid": match.group(2)
                     })
             return vms
-        except Exception:
-            return []
+        except Exception as e:
+            raise VMProviderError(f"Error listing VirtualBox VMs: {e}")
 
     def login(self, name: Optional[str] = None) -> bool:
         """
@@ -82,11 +88,11 @@ class Provider(LocalBaseManager):
         This method informs the user to use SSH or the GUI.
         """
         if not name:
-            self.print("Error: VM name is required to login.")
-            return False
+            logger.error("VM name is required to login.")
+            raise VMProviderError("VM name is required to login.")
 
-        self.print(f"Note: VirtualBox does not have a native shell. Please use SSH to log into {name}.")
-        self.print(f"Example: ssh username@{ip_address}")
+        logger.info(f"Note: VirtualBox does not have a native shell. Please use SSH to log into {name}.")
+        logger.info(f"Example: ssh username@{ip_address}")
         return False
 
     def suspend(self, name: Optional[str] = None) -> bool:
@@ -94,27 +100,30 @@ class Provider(LocalBaseManager):
         Suspends a VirtualBox VM (Saves state).
         """
         if not name or not self.exists(name):
-            self.print(f"Error: VM {name} not found.")
-            return False
+            logger.error(f"VM {name} not found.")
+            raise VMResourceError(f"VM {name} not found.")
 
         try:
             self._run_command(["VBoxManage", "controlvm", name, "savestate"])
             return True
-        except Exception:
-            return False
+        except Exception as e:
+            logger.error(f"Error suspending VM {name}: {e}")
+            raise VMProviderError(f"Error suspending VM {name}: {e}")
 
     def restart(self, name: Optional[str] = None) -> bool:
         """
         Restarts a VirtualBox VM.
         """
         if not name or not self.exists(name):
-            return False
+            logger.error(f"VM {name} not found.")
+            raise VMResourceError(f"VM {name} not found.")
         try:
             self.stop(name)
             self.start(name)
             return True
-        except Exception:
-            return False
+        except Exception as e:
+            logger.error(f"Error restarting VM {name}: {e}")
+            raise VMProviderError(f"Error restarting VM {name}: {e}")
 
     def get_flavors(self, **kwargs) -> List[Dict[str, Any]]:
         """
@@ -150,13 +159,18 @@ class Provider(LocalBaseManager):
         """
         Checks if the requirements for this provider are met on the current system.
         """
-        import shutil
         return shutil.which("VBoxManage") is not None
 
     def run_command(self, name: str, cmd: str) -> str:
         """
         Executes a command on the VirtualBox VM using guestcontrol.
         Requires Guest Additions.
+
+        WARNING: This method is susceptible to shell injection if 'cmd' is not properly sanitized,
+        as it executes via '/bin/sh -c'.
+
+        WARNING: This method exposes the guest password in the host's process list
+        via the '--password' argument. Users are encouraged to use SSH keys for secure access.
         """
         if not name or not self.exists(name):
             raise VMProviderError(f"VM {name} not found.")
@@ -166,6 +180,8 @@ class Provider(LocalBaseManager):
         password = cloud_config.get("password", "")
 
         try:
+            # We use /bin/sh -c to allow running complex shell commands.
+            # The user is responsible for sanitizing 'cmd'.
             result = self._run_command([
                 "VBoxManage", "guestcontrol", name, "run",
                 f"--username={username}",
@@ -175,7 +191,7 @@ class Provider(LocalBaseManager):
             ])
             return result.stdout
         except Exception as e:
-            return f"Error executing command (requires Guest Additions): {e}"
+            raise VMProviderError(f"Error executing command on VirtualBox VM {name} (requires Guest Additions): {e}")
 
     def info(self, name: str) -> Dict[str, Any]:
         """Gets detailed information about a VirtualBox VM."""
@@ -208,25 +224,27 @@ class Provider(LocalBaseManager):
         """
         Polls the VirtualBox VM status until it matches target_status.
         """
-        import time
-        from cloudmesh.ai.vm.logger import logger
-
         logger.info(f"Waiting for VirtualBox VM {name} to reach status {target_status}...")
         start_time = time.time()
+        target_status_lower = target_status.lower()
 
         while time.time() - start_time < timeout:
-            # VBoxManage doesn't have a simple 'status' command that returns just the state.
-            # We use showvminfo and check the 'State' field.
             try:
-                res = self.info(name)
-                if "error" not in res:
+                if target_status_lower == "running":
+                    # Fast path: check VBoxManage list runningvms
+                    result = self._run_command(["VBoxManage", "list", "runningvms"])
+                    # VBoxManage list runningvms output format: "VM Name" {uuid}
+                    if any(f'"{name}"' in line for line in result.stdout.splitlines()):
+                        logger.info(f"VM {name} reached status {target_status}.")
+                        return True
+                else:
+                    # Slow path: use showvminfo and pre-compiled regex
+                    res = self.info(name)
                     info_text = res.get("RawInfo", "")
-                    # Search for "State:   running" or similar in showvminfo output
-                    import re
-                    match = re.search(r"State:\s+([a-zA-Z]+)", info_text)
+                    match = self.STATE_PATTERN.search(info_text)
                     if match:
                         current_status = match.group(1).lower()
-                        if current_status == target_status.lower():
+                        if current_status == target_status_lower:
                             logger.info(f"VM {name} reached status {target_status}.")
                             return True
             except Exception:
