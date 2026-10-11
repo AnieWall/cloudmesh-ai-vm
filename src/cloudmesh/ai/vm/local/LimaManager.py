@@ -265,7 +265,7 @@ class Provider(LocalBaseManager):
             return False
 
         try:
-            escaped_name = re.escape(key_name)
+            escaped_name = re.escape(key_name).replace("/", r"\/").replace("'", "'\\''")
             command = [
                 "limactl", "shell", vm_name,
                 "sh", "-c",
