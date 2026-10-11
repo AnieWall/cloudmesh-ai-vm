@@ -8,6 +8,7 @@ from cloudmesh.ai.vm.state_manager import StateManager
 from cloudmesh.ai.vm.factory import factory
 from cloudmesh.ai.vm.local.LimaManager import Provider as LimaProvider
 from cloudmesh.ai.common.stopwatch import StopWatch
+from tests.smoke.benchmark_helper import save_benchmark
 
 # Register the provider in the factory for the test
 factory.register("lima", LimaProvider)
@@ -39,7 +40,6 @@ def ssh_key(tmp_path):
     key_path = tmp_path / "id_rsa"
     pub_key_path = tmp_path / "id_rsa.pub"
 
-    # Generate key without passphrase
     subprocess.run(
         ["ssh-keygen", "-t", "rsa", "-b", "2048", "-f", str(key_path), "-N", ""],
         check=True,
@@ -51,11 +51,36 @@ def ssh_key(tmp_path):
 def test_lima_smoke(temp_config, ssh_key):
     """
     Smoke test for Lima provider:
-    Start -> Connectivity -> SSH Key Upload -> Verify Key -> Delete Key -> Verify Key Deleted -> Info -> List -> Stop -> Delete
+    Requirements -> Images -> Flavors -> Info -> Start -> Connectivity -> SSH Key Upload -> Verify Key -> Delete Key -> Verify Key Deleted -> Info -> List -> Stop -> Delete
     """
     priv_key_path, pub_key_path = ssh_key
     state = StateManager(temp_config)
     provider = factory.create("lima", state.config)
+
+    # --- Provider Level Checks ---
+    if hasattr(provider, "check_requirements"):
+        with StopWatch.timer("lima_check_reqs"):
+            print("Checking Lima requirements...")
+            assert provider.check_requirements() is True
+
+    with StopWatch.timer("lima_get_images"):
+        print("Fetching available images...")
+        images = provider.get_images()
+        assert isinstance(images, list)
+        print(f"Found {len(images)} images.")
+
+    with StopWatch.timer("lima_get_flavors"):
+        print("Fetching available flavors...")
+        flavors = provider.get_flavors()
+        assert isinstance(flavors, list)
+        assert len(flavors) > 0
+        print(f"Found {len(flavors)} flavors.")
+
+    with StopWatch.timer("lima_get_provider_info"):
+        print("Fetching provider info...")
+        p_info = provider.get_provider_info()
+        assert p_info is not None
+        print(f"Provider info retrieved.")
 
     cloud_config = provider.get_cloud_config("lima")
     username = cloud_config.get("username", "user").replace("_", "-")
@@ -97,11 +122,15 @@ def test_lima_smoke(temp_config, ssh_key):
                 pub_key_content = f.read().strip()
 
             escaped_key = pub_key_content.replace("'", "'\\''")
-            # Using lima exec to verify the key is in authorized_keys
-            verify_cmd = ["limactl", "shell", vm_name, "bash", "-c", f"grep -q '{escaped_key}' ~/.ssh/authorized_keys"]
+            # Use the base class helper for consistency
+            user = cloud_config.get("user", "ubuntu")
+            # Lima uses a local IP or special hostname
+            info = provider.info(vm_name)
+            ip = info.get("ip") or "lima-vm"
 
-            result = subprocess.run(verify_cmd, capture_output=True)
-            assert result.returncode == 0, f"SSH key was not found in {vm_name}'s authorized_keys"
+            verify_cmd = f"grep -q '{escaped_key}' ~/.ssh/authorized_keys"
+            result = provider._execute_ssh_command(ip, user, priv_key_path, verify_cmd)
+            assert "SSH Error" not in result, f"SSH key was not found in {vm_name}'s authorized_keys"
             print("SSH key verified successfully.")
 
         # Delete SSH Key
@@ -112,12 +141,9 @@ def test_lima_smoke(temp_config, ssh_key):
         # Verify SSH Key Deleted
         with StopWatch.timer("lima_verify_key_deleted"):
             print("Verifying SSH key is removed...")
-            verify_cmd_del = [
-                "limactl", "shell", vm_name, "bash", "-c",
-                f"grep -q '{escaped_key}' ~/.ssh/authorized_keys"
-            ]
-            result_del = subprocess.run(verify_cmd_del, capture_output=True)
-            assert result_del.returncode != 0, \
+            verify_cmd_del = f"grep -q '{escaped_key}' ~/.ssh/authorized_keys"
+            result_del = provider._execute_ssh_command(ip, user, priv_key_path, verify_cmd_del)
+            assert "SSH Error" in result_del, \
                 f"SSH key should have been removed from {vm_name}"
             print("SSH key removal verified.")
 
@@ -163,6 +189,7 @@ def test_lima_smoke(temp_config, ssh_key):
 
     finally:
         StopWatch.benchmark(tag=f"Lima Smoke {vm_name}")
+        save_benchmark(tag=f"Lima Smoke {vm_name}", config_path=temp_config)
         try:
             if provider.exists(vm_name):
                 provider.delete(vm_name)

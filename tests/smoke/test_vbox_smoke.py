@@ -7,6 +7,7 @@ from cloudmesh.ai.vm.state_manager import StateManager
 from cloudmesh.ai.vm.factory import factory
 from cloudmesh.ai.vm.local.VBoxManager import Provider as VBoxProvider
 from cloudmesh.ai.common.stopwatch import StopWatch
+from tests.smoke.benchmark_helper import save_benchmark
 
 # Register the provider in the factory for the test
 factory.register("vbox", VBoxProvider)
@@ -93,7 +94,7 @@ def test_vbox_smoke(temp_config):
         print("\nVBox Smoke test passed successfully!")
 
     finally:
-        StopWatch.benchmark(tag=f"VBox Smoke {vm_name}")
+        save_benchmark(tag=f"VBox Smoke {vm_name}", config_path=temp_config)
         try:
             if provider.exists(vm_name):
                 provider.delete(vm_name)

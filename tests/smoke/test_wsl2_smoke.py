@@ -8,6 +8,7 @@ from cloudmesh.ai.vm.state_manager import StateManager
 from cloudmesh.ai.vm.factory import factory
 from cloudmesh.ai.vm.local.Wsl2Manager import Provider as Wsl2Provider
 from cloudmesh.ai.common.stopwatch import StopWatch
+from tests.smoke.benchmark_helper import save_benchmark
 
 # Register the provider in the factory for the test
 factory.register("wsl2", Wsl2Provider)
@@ -127,6 +128,7 @@ def test_wsl2_smoke():
     finally:
         # Print the benchmark results
         StopWatch.benchmark(tag=f"WSL2 Smoke {vm_name}")
+        save_benchmark(tag=f"WSL2 Smoke {vm_name}", config_path=temp_config)
 
         # Cleanup in case of failure
         try:

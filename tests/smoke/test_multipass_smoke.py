@@ -9,6 +9,7 @@ from cloudmesh.ai.vm.state_manager import StateManager
 from cloudmesh.ai.vm.factory import factory
 from cloudmesh.ai.vm.local.MultipassManager import Provider as MultipassProvider
 from cloudmesh.ai.common.stopwatch import StopWatch
+from tests.smoke.benchmark_helper import save_benchmark
 
 # Register the provider in the factory for the test
 factory.register("multipass", MultipassProvider)
@@ -199,7 +200,7 @@ def test_multipass_smoke(temp_config, ssh_key):
 
     finally:
         # Print the benchmark results
-        StopWatch.benchmark(tag=f"Multipass Smoke {vm_name}")
+        save_benchmark(tag=f"Multipass Smoke {vm_name}", config_path=temp_config)
 
         # Cleanup in case of failure
         try:
