@@ -176,7 +176,7 @@ def create_temp_config(tmp_path, provider_cfg):
 @pytest.mark.parametrize("provider_cfg", PROVIDER_CONFIGS, ids=lambda x: x.name)
 def test_provider_lifecycle(provider_cfg, tmp_path, ssh_key):
     # Clear previous timers to prevent cross-provider pollution
-    StopWatch.reset()
+    StopWatch.clear()
 
     if provider_cfg.skip_condition and provider_cfg.skip_condition():
         pytest.skip(f"Skip condition met for {provider_cfg.name}")
