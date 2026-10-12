@@ -831,15 +831,35 @@ class Provider(CloudBaseManager):
                         if getattr(f, 'id', None) == lookup_val or getattr(f, 'name', None) == lookup_val:
                             return f.name
 
-                # 3. If it was marked as a reservation or not found as a flavor, try resolving as a lease
-                if is_reservation or (len(lookup_val) == 36 and lookup_val.count('-') == 4):
+                # 3. Handle Reservations: Resolve UUID to human-readable name
+                if is_reservation or (isinstance(lookup_val, str) and len(lookup_val) == 36 and lookup_val.count('-') == 4):
                     try:
+                        # Try high-level CHI Lease object first
                         lease = chi.lease.Lease(lookup_val)
                         reserved_flavors = lease.get_reserved_flavors()
-                        if reserved_flavors:
+                        if reserved_flavors and len(reserved_flavors) > 0:
                             return reserved_flavors[0].name
+
+                        # Fallback: Manually fetch reservation details from leases list
+                        # (Same logic used in _get_reservation_details)
+                        leases = chi.lease.list_leases()
+                        for l in leases:
+                            res_types = ["flavor_reservations", "node_reservations", "fip_reservations", "network_reservations", "device_reservations"]
+                            for res_type in res_types:
+                                reservations = getattr(l, res_type, [])
+                                for res in reservations:
+                                    r_id = res.get("id") if isinstance(res, dict) else getattr(res, "id", None)
+                                    if r_id == lookup_val:
+                                        res_props = res.get("resource_properties", {}) if isinstance(res, dict) else getattr(res, "resource_properties", {})
+                                        if isinstance(res_props, str):
+                                            try:
+                                                res_props = json.loads(res_props)
+                                            except:
+                                                res_props = {}
+                                        if isinstance(res_props, dict) and res_props.get("name"):
+                                            return res_props.get("name")
                     except Exception as e:
-                        logger.debug(f"Lease lookup failed for {lookup_val}: {e}")
+                        logger.debug(f"Reservation lookup failed for {lookup_val}: {e}")
             except Exception as e:
                 logger.debug(f"Could not resolve flavor {flavor_val}: {e}")
 
@@ -906,12 +926,18 @@ class Provider(CloudBaseManager):
                                 all_ips.append(str(addr))
                 ip = ", ".join(all_ips) if all_ips else "No IP"
 
-                # Resolve flavor name
-                flavor_val = getattr(s, 'flavor', None)
-                flavor_name = self._resolve_flavor_name(flavor_val, flavor_map=flavor_map)
-
-                if flavor_name == "Unknown" or flavor_name.startswith("reservation:"):
-                    flavor_name = self._resolve_flavor_name(getattr(s, 'flavor_name', None), flavor_map=flavor_map)
+                # Resolve flavor name using the same logic as 'cmx vm info'
+                try:
+                    vm_info = self.info(s.name, kind='vm')
+                    flavor_name = vm_info.get("Flavor", "Unknown")
+                    if isinstance(flavor_name, dict):
+                        flavor_name = flavor_name.get("name", "Unknown")
+                except Exception:
+                    # Fallback to the basic resolution if info() fails
+                    flavor_val = getattr(s, 'flavor', None)
+                    flavor_name = self._resolve_flavor_name(flavor_val, flavor_map=flavor_map)
+                    if flavor_name == "Unknown" or flavor_name.startswith("reservation:"):
+                        flavor_name = self._resolve_flavor_name(getattr(s, 'flavor_name', None), flavor_map=flavor_map)
 
                 results.append({
                     "name": s.name,
