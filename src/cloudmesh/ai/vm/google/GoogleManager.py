@@ -93,7 +93,7 @@ class Provider(LibcloudManager):
         }
 
     def restart(self, name: Optional[str] = None) -> bool:
-        """Restarts a Google VM."""
+        """Restarts a Google VM using the native reboot command."""
         if not name:
             return False
         try:
@@ -110,10 +110,14 @@ class Provider(LibcloudManager):
         except Exception as e:
             if isinstance(e, ProviderFeatureNotSupported):
                 raise e
+            logger.error(f"Error restarting Google VM {name}: {e}")
             return False
 
     def suspend(self, name: Optional[str] = None) -> bool:
-        """Suspends a Google VM."""
+        """
+        Suspends a Google VM. Tries native suspend first;
+        falls back to stop to ensure compute resources are released.
+        """
         if not name:
             return False
         try:
@@ -123,22 +127,32 @@ class Provider(LibcloudManager):
             if hasattr(node, 'suspend'):
                 node.suspend()
                 return True
-            # Fallback to stop if suspend not available
+
+            logger.info(f"Native suspend not supported for {name}. Falling back to stop...")
             return self.stop(name)
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error suspending Google VM {name}: {e}")
             return False
 
     def reset(self, name: Optional[str] = None) -> bool:
-        """Resets a Google VM (Hard reboot)."""
+        """
+        Resets a Google VM. Performs a hard power cycle (stop -> start)
+        if the native restart fails.
+        """
         if not name:
             return False
         try:
+            # 1. Try the soft restart first
             if self.restart(name):
                 return True
+
+            # 2. Fallback: Hard Power Cycle
+            logger.info(f"Native restart failed for {name}. Performing hard reset (stop -> start)...")
             if self.stop(name):
                 return self.start(name=name)
             return False
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error resetting Google VM {name}: {e}")
             return False
 
 

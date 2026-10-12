@@ -87,7 +87,7 @@ class Provider(LibcloudManager):
             raise VMProviderError(f"Failed to release floating IP from {name}: {e}")
 
     def restart(self, name: Optional[str] = None) -> bool:
-        """Restarts an AWS VM."""
+        """Restarts an AWS VM using the native reboot command."""
         if not name:
             return False
         try:
@@ -104,29 +104,41 @@ class Provider(LibcloudManager):
         except Exception as e:
             if isinstance(e, ProviderFeatureNotSupported):
                 raise e
+            logger.error(f"Error restarting AWS VM {name}: {e}")
             return False
 
     def suspend(self, name: Optional[str] = None) -> bool:
-        """Suspends (Stops) an AWS VM."""
+        """
+        Suspends an AWS VM. In EC2, this is mapped to 'stop' to release
+        compute resources and stop billing.
+        """
         if not name:
             return False
         try:
-            # In AWS, suspend is effectively stop (deallocate)
             return self.stop(name)
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error suspending AWS VM {name}: {e}")
             return False
 
     def reset(self, name: Optional[str] = None) -> bool:
-        """Resets an AWS VM (Hard reboot)."""
+        """
+        Resets an AWS VM. Performs a hard power cycle (stop -> start)
+        if the native restart fails.
+        """
         if not name:
             return False
         try:
+            # 1. Try the soft restart first
             if self.restart(name):
                 return True
+
+            # 2. Fallback: Hard Power Cycle
+            logger.info(f"Native restart failed for {name}. Performing hard reset (stop -> start)...")
             if self.stop(name):
                 return self.start(name=name)
             return False
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error resetting AWS VM {name}: {e}")
             return False
 
     def get_provider_info(self) -> Dict[str, Any]:

@@ -92,7 +92,7 @@ class Provider(LibcloudManager):
         }
 
     def restart(self, name: Optional[str] = None) -> bool:
-        """Restarts an Azure VM."""
+        """Restarts an Azure VM using the native reboot command."""
         if not name:
             return False
         try:
@@ -109,29 +109,41 @@ class Provider(LibcloudManager):
         except Exception as e:
             if isinstance(e, ProviderFeatureNotSupported):
                 raise e
+            logger.error(f"Error restarting Azure VM {name}: {e}")
             return False
 
     def suspend(self, name: Optional[str] = None) -> bool:
-        """Suspends (Deallocates) an Azure VM."""
+        """
+        Suspends an Azure VM. In Azure, this is mapped to 'stop' (deallocate)
+        to release compute resources and stop billing.
+        """
         if not name:
             return False
         try:
-            # In Azure, suspend is effectively stop/deallocate
             return self.stop(name)
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error suspending Azure VM {name}: {e}")
             return False
 
     def reset(self, name: Optional[str] = None) -> bool:
-        """Resets an Azure VM (Hard reboot)."""
+        """
+        Resets an Azure VM. Performs a hard power cycle (stop -> start)
+        if the native restart fails.
+        """
         if not name:
             return False
         try:
+            # 1. Try the soft restart first
             if self.restart(name):
                 return True
+
+            # 2. Fallback: Hard Power Cycle
+            logger.info(f"Native restart failed for {name}. Performing hard reset (stop -> start)...")
             if self.stop(name):
                 return self.start(name=name)
             return False
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error resetting Azure VM {name}: {e}")
             return False
 
 
