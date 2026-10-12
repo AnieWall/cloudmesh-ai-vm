@@ -228,7 +228,7 @@ class Provider(LocalBaseManager):
         except Exception as e:
             return f"Error executing command: {e}"
 
-    def info(self, name: str) -> Dict[str, Any]:
+    def info(self, name: str, kind: str = "vm") -> Dict[str, Any]:
         """Gets detailed information about a WSL2 distribution."""
         if not name or not self.exists(name):
             raise VMResourceError(f"Distribution {name} not found")

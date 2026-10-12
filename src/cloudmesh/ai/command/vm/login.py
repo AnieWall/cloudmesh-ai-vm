@@ -7,6 +7,7 @@ from ._shared.exceptions import handle_errors, VMCommandError
 @click.argument("name", required=False)
 @vm_options
 @handle_errors
+@click.pass_context
 def login(ctx: click.Context, name: Optional[str] = None, **kwargs)-> None:    
     
     """

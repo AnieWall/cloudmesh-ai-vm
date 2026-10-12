@@ -1,7 +1,11 @@
+import json
 import yaml
+import datetime
 import os
 import warnings
 import logging
+from pprint import pprint
+
 
 # Suppress the specific neutronclient deprecation warning globally in this module
 warnings.filterwarnings(
@@ -31,6 +35,13 @@ from chi import keypair, lease, network, server
 from .ChameleonAuthManager import authenticate_chi_from_cloud
 from cloudmesh.ai.vm.logger import logger
 
+def DDD(msg):
+    if isinstance(msg, dict):
+        msg = yaml.safe_dump(msg, sort_keys=False, default_flow_style=False)
+    else:
+        msg = str(msg)
+    print(msg)
+
 class Provider(CloudBaseManager):
     """
     Chameleon Cloud implementation of the VM Manager.
@@ -42,7 +53,97 @@ class Provider(CloudBaseManager):
         self.cloud_name = cloud_name
         self._chi_initialized = False
 
+    def _json_serial(self, obj):
+        """JSON serializer for objects not serializable by default json code"""
+        if isinstance(obj, (datetime.datetime, datetime.date)):
+            return obj.isoformat()
+        return str(obj)
+
+    def _get_reservation_details(self, reservation_id):
+        """Finds the lease and reservation details for a given reservation ID."""
+        try:
+            leases = chi.lease.list_leases()
+            res_types = ["flavor_reservations", "node_reservations", "fip_reservations", "network_reservations", "device_reservations"]
+
+            for l in leases:
+                for res_type in res_types:
+                    reservations = getattr(l, res_type, [])
+                    for res in reservations:
+                        r_id = res.get("id") if isinstance(res, dict) else getattr(res, "id", None)
+                        if r_id == reservation_id:
+                            def get_val(obj, key, default="N/A"):
+                                if isinstance(obj, dict): return obj.get(key, default)
+                                return getattr(obj, key, default)
+
+                            return {
+                                "lease": {
+                                    "name": get_val(l, "name"),
+                                    "id": get_val(l, "id"),
+                                    "status": get_val(l, "status"),
+                                    "start_date": get_val(l, "start_date"),
+                                    "end_date": get_val(l, "end_date"),
+                                },
+                                "reservation": {
+                                    "id": get_val(res, "id"),
+                                    "resource_type": get_val(res, "resource_type"),
+                                    "status": get_val(res, "status"),
+                                    "resource_properties": get_val(res, "resource_properties"),
+                                    "amount": get_val(res, "amount"),
+                                }
+                            }
+        except Exception as e:
+            return {"error": f"Could not fetch reservation details: {e}"}
+        return None
+
+    def _get_security_group_details(self, server):
+        """Retrieves security groups and their rules for the server."""
+        try:
+            sgs = getattr(server, "security_groups", [])
+            if not sgs:
+                conn = getattr(server, "conn", None)
+                if conn:
+                    try:
+                        server_id = getattr(server, "id", None)
+                        server_details = conn.compute.get_server(server_id)
+                        sgs = getattr(server_details, "security_groups", [])
+                    except Exception:
+                        pass
+            if not sgs:
+                return []
+
+            sg_details = []
+            for sg in sgs:
+                name = sg.get("name") if isinstance(sg, dict) else getattr(sg, "name", str(sg))
+                try:
+                    result = chi.network.neutron().list_security_group_rules(name)
+                    rules = result.get("security_group_rules", []) if isinstance(result, dict) else result
+
+                    seen_rules = set()
+                    unique_rules = []
+                    for r in rules:
+                        rule_data = {
+                            "protocol": r.get("protocol") if isinstance(r, dict) else getattr(r, "protocol", "Unknown"),
+                            "port_range_min": r.get("port_range_min") if isinstance(r, dict) else getattr(r, "port_range_min", "Unknown"),
+                            "port_range_max": r.get("port_range_max") if isinstance(r, dict) else getattr(r, "port_range_max", "Unknown"),
+                            "remote_ip": r.get("remote_ip_prefix") if isinstance(r, dict) else getattr(r, "remote_ip_prefix", "Unknown"),
+                            "direction": r.get("direction") if isinstance(r, dict) else getattr(r, "direction", "Unknown"),
+                        }
+                        for key, val in rule_data.items():
+                            if val is None:
+                                rule_data[key] = "Any"
+                        rule_tuple = tuple(rule_data.items())
+                        if rule_tuple not in seen_rules:
+                            seen_rules.add(rule_tuple)
+                            unique_rules.append(rule_data)
+                    sg_details.append({"name": name, "rules": unique_rules})
+                except Exception as e:
+                    sg_details.append({"name": name, "error": f"Could not fetch rules: {e}"})
+            return sg_details
+        except Exception as e:
+            return {"error": f"Could not fetch security groups: {e}"}
+
     def _setup_chi_context(self):
+        """Initializes the CHI context and authenticates if necessary."""
         if self._chi_initialized:
             return
 
@@ -58,6 +159,282 @@ class Provider(CloudBaseManager):
             chi.context.use_site("KVM@TACC")
 
         self._chi_initialized = True
+
+    def info(self, name: str, kind: str = "vm") -> Dict[str, Any]:
+        """
+        Returns detailed information about a Chameleon VM.
+        :param name: Name of the VM.
+        :param kind: Type of info to return: 'all' (full report), 'vm' (vm_info), or 'list' (simplified).
+        """
+        self._setup_chi_context()
+
+        # 1. Get high-level info from the provider
+        try:
+            info = self._get_basic_info(name)
+        except Exception as e:
+            logger.error(f"Error getting provider info for {name}: {e}")
+            info = {}
+
+        # 2. Get deep-dive info directly from the chi library
+        try:
+            server = chi.server.get_server(name)
+            if server:
+                # Extract and clean attributes from the server object
+                raw_attrs = server.__dict__.copy()
+                cleaned_attrs = {}
+                for k, v in raw_attrs.items():
+                    if hasattr(v, "__dict__") or isinstance(v, (set, complex)):
+                        cleaned_attrs[k] = str(v)
+                    elif isinstance(v, list):
+                        cleaned_attrs[k] = [str(i) if hasattr(i, "__dict__") else i for i in v]
+                    else:
+                        cleaned_attrs[k] = v
+
+                raw_details = {
+                    "raw_attributes": cleaned_attrs,
+                    "addresses": getattr(server, "addresses", {}),
+                    "status": getattr(server, "status", "Unknown"),
+                    "id": getattr(server, "id", "Unknown"),
+                    "name": getattr(server, "name", "Unknown"),
+                }
+
+                # Resolve Reservation Details
+                reservation_info = None
+                flavor_name = getattr(server, "flavor_name", "")
+                if flavor_name and flavor_name.startswith("reservation:"):
+                    res_id = flavor_name.split(":", 1)[1]
+                    reservation_info = self._get_reservation_details(res_id)
+
+                # Enhance Provider Info with Flavor details from resource_properties
+                if reservation_info and "reservation" in reservation_info:
+                    res_props_raw = reservation_info["reservation"].get("resource_properties", "{}")
+                    try:
+                        res_props = json.loads(res_props_raw) if isinstance(res_props_raw, str) else res_props_raw
+                        info["Flavor"] = {
+                            "id": res_props.get("id"),
+                            "name": res_props.get("name"),
+                            "ram": res_props.get("ram"),
+                            "disk": res_props.get("disk"),
+                            "vcpus": res_props.get("vcpus"),
+                            "extra_specs": res_props.get("extra_specs"),
+                            "reservation_id": res_id
+                        }
+                    except Exception:
+                        pass
+
+                # Resolve Security Group Details
+                sg_info = self._get_security_group_details(server)
+
+                # Add simplified security group info to vm_info
+                if isinstance(sg_info, list):
+                    simplified_sgs = []
+                    for sg in sg_info:
+                        if not isinstance(sg, dict) or "name" not in sg:
+                            continue
+                        name_sg = sg["name"]
+                        rules_summary = []
+                        for r in sg.get("rules", []):
+                            if not isinstance(r, dict): continue
+                            proto = r.get("protocol", "Any")
+                            p_min = r.get("port_range_min", "Any")
+                            p_max = r.get("port_range_max", "Any")
+                            remote = r.get("remote_ip", "Any")
+                            direction = r.get("direction", "Unknown")
+                            if proto == "Any" and p_min == "Any" and remote == "Any":
+                                summary = f"All {direction}"
+                            elif proto == "icmp" and p_min == "Any" and remote == "Any":
+                                summary = f"ICMP {direction}"
+                            elif proto == "tcp" and p_min == "22" and p_max == "22":
+                                remote_label = "All" if remote in ["0.0.0.0/0", "Any"] else remote
+                                summary = f"SSH {direction} from {remote_label}"
+                            else:
+                                port_str = f"{p_min}-{p_max}" if p_min != p_max else str(p_min)
+                                remote_label = "All" if remote in ["0.0.0.0/0", "Any"] else remote
+                                summary = f"{proto} {port_str} {direction} from {remote_label}"
+                            if summary not in rules_summary:
+                                rules_summary.append(summary)
+                        simplified_sgs.append({
+                            "name": name_sg,
+                            "summary": "; ".join(rules_summary) if rules_summary else "No rules"
+                        })
+                    info["SecurityGroups"] = simplified_sgs
+                elif isinstance(sg_info, dict) and "error" in sg_info:
+                    info["SecurityGroups"] = sg_info["error"]
+
+                full_details = {
+                    "chi_raw_details": raw_details,
+                    "reservation_details": reservation_info,
+                    "security_groups": sg_info,
+                    "vm_info": info
+                }
+            else:
+                full_details = {"vm_info": info}
+        except Exception as e:
+            logger.error(f"Error getting raw chi details for {name}: {e}")
+            full_details = {"vm_info": info}
+
+
+        if kind == "all":
+            return full_details
+        elif kind == "vm":
+            return full_details.get("vm_info", info)
+        elif kind == "security_groups":
+            return full_details.get("security_groups", sg_info)
+        elif kind == "reservation_details":
+            return full_details.get("reservation_details", reservation_info)
+        elif kind == "chi_raw_details":
+            return full_details.get("chi_raw_details", raw_details)
+        elif kind == "full":
+            return full_details
+        elif kind == "list":
+            d = {
+                "Name": info.get("name", "Unknown"),
+                "Status": info.get("status", "Unknown"),
+                "Image": info.get("image", "Unknown"),
+                "Flavor": info.get("flavor", "Unknown"),
+                "IP": info.get("ip", "Unknown"),
+                "TTL": info.get("ttl", "Unknown"),
+            }
+            return d
+
+        return full_details
+        """
+        Returns detailed information about a Chameleon VM.
+        :param name: Name of the VM.
+        :param kind: Type of info to return: 'all' (full report), 'vm' (vm_info), or 'list' (simplified).
+        """
+        self._setup_chi_context()
+
+        # 1. Get high-level info from the provider
+        try:
+            info = self.info(name)
+        except Exception as e:
+            logger.error(f"Error getting provider info for {name}: {e}")
+            info = {}
+
+        # 2. Get deep-dive info directly from the chi library
+        try:
+            server = chi.server.get_server(name)
+            if server:
+                # Extract and clean attributes from the server object
+                raw_attrs = server.__dict__.copy()
+                cleaned_attrs = {}
+                for k, v in raw_attrs.items():
+                    if hasattr(v, "__dict__") or isinstance(v, (set, complex)):
+                        cleaned_attrs[k] = str(v)
+                    elif isinstance(v, list):
+                        cleaned_attrs[k] = [str(i) if hasattr(i, "__dict__") else i for i in v]
+                    else:
+                        cleaned_attrs[k] = v
+
+                raw_details = {
+                    "raw_attributes": cleaned_attrs,
+                    "addresses": getattr(server, "addresses", {}),
+                    "status": getattr(server, "status", "Unknown"),
+                    "id": getattr(server, "id", "Unknown"),
+                    "name": getattr(server, "name", "Unknown"),
+                }
+
+                # Resolve Reservation Details
+                reservation_info = None
+                flavor_name = getattr(server, "flavor_name", "")
+                if flavor_name and flavor_name.startswith("reservation:"):
+                    res_id = flavor_name.split(":", 1)[1]
+                    reservation_info = self._get_reservation_details(res_id)
+
+                # Enhance Provider Info with Flavor details from resource_properties
+                if reservation_info and "reservation" in reservation_info:
+                    res_props_raw = reservation_info["reservation"].get("resource_properties", "{}")
+                    try:
+                        res_props = json.loads(res_props_raw) if isinstance(res_props_raw, str) else res_props_raw
+                        info["Flavor"] = {
+                            "id": res_props.get("id"),
+                            "name": res_props.get("name"),
+                            "ram": res_props.get("ram"),
+                            "disk": res_props.get("disk"),
+                            "vcpus": res_props.get("vcpus"),
+                            "extra_specs": res_props.get("extra_specs"),
+                            "reservation_id": res_id
+                        }
+                    except Exception:
+                        pass
+
+                # Resolve Security Group Details
+                sg_info = self._get_security_group_details(server)
+
+                # Add simplified security group info to vm_info
+                if isinstance(sg_info, list):
+                    simplified_sgs = []
+                    for sg in sg_info:
+                        if not isinstance(sg, dict) or "name" not in sg:
+                            continue
+                        name_sg = sg["name"]
+                        rules_summary = []
+                        for r in sg.get("rules", []):
+                            if not isinstance(r, dict): continue
+                            proto = r.get("protocol", "Any")
+                            p_min = r.get("port_range_min", "Any")
+                            p_max = r.get("port_range_max", "Any")
+                            remote = r.get("remote_ip", "Any")
+                            direction = r.get("direction", "Unknown")
+                            if proto == "Any" and p_min == "Any" and remote == "Any":
+                                summary = f"All {direction}"
+                            elif proto == "icmp" and p_min == "Any" and remote == "Any":
+                                summary = f"ICMP {direction}"
+                            elif proto == "tcp" and p_min == "22" and p_max == "22":
+                                remote_label = "All" if remote in ["0.0.0.0/0", "Any"] else remote
+                                summary = f"SSH {direction} from {remote_label}"
+                            else:
+                                port_str = f"{p_min}-{p_max}" if p_min != p_max else str(p_min)
+                                remote_label = "All" if remote in ["0.0.0.0/0", "Any"] else remote
+                                summary = f"{proto} {port_str} {direction} from {remote_label}"
+                            if summary not in rules_summary:
+                                rules_summary.append(summary)
+                        simplified_sgs.append({
+                            "name": name_sg,
+                            "summary": "; ".join(rules_summary) if rules_summary else "No rules"
+                        })
+                    info["SecurityGroups"] = simplified_sgs
+                elif isinstance(sg_info, dict) and "error" in sg_info:
+                    info["SecurityGroups"] = sg_info["error"]
+
+                full_details = {
+                    "chi_raw_details": raw_details,
+                    "reservation_details": reservation_info,
+                    "security_groups": sg_info,
+                    "vm_info": info
+                }
+            else:
+                full_details = {"vm_info": info}
+        except Exception as e:
+            logger.error(f"Error getting raw chi details for {name}: {e}")
+            full_details = {"vm_info": info}
+
+
+        if kind == "all":
+            return full_details
+        elif kind == "vm":
+            return full_details.get("vm_info", info)
+        elif kind == "security_groups":
+            return full_details.get("security_groups", sg_info)
+        elif kind == "reservation_details":
+            return full_details.get("reservation_details", reservation_info)
+        elif kind == "chi_raw_details":
+            return full_details.get("chi_raw_details", raw_details)
+        elif kind == "full":
+            return full_details
+        elif kind == "list":
+            d = {
+                "Name": info.get("name", "Unknown"),
+                "Status": info.get("status", "Unknown"),
+                "Image": info.get("image", "Unknown"),
+                "Flavor": info.get("flavor", "Unknown"),
+                "IP": info.get("ip", "Unknown"),
+                "TTL": info.get("ttl", "Unknown"),
+            }
+            return d
+
+        return full_details
 
     def _get_node_type(self, flavor: str) -> str:
         """
@@ -92,7 +469,7 @@ class Provider(CloudBaseManager):
         except Exception:
             return False
 
-    def start(self, name: Optional[str] = None, flavor: Optional[str] = None, image: Optional[str] = None, **kwargs) -> str:
+    def start(self, name: Optional[str] = None, flavor: Optional[str] = None, image: Optional[str] = None, duration: Optional[str] = None, **kwargs) -> str:
         """Starts a VM in Chameleon using the chi library, automatically creating a reservation."""
         self._setup_chi_context()
         cloud_config = self.get_cloud_config("chameleon")
@@ -103,6 +480,23 @@ class Provider(CloudBaseManager):
         username = cloud_config.get("username", "user").replace('_', '-')
         key_name = cloud_config.get("key_name", username)
         assign_ip = kwargs.get("assign_ip", True)
+
+        # Parse duration string (e.g., '3h', '1d') to timedelta
+        lease_duration_td = timedelta(hours=1) # Default
+        if duration:
+            try:
+                unit = duration[-1].lower()
+                value = int(duration[:-1])
+                if unit == 'h':
+                    lease_duration_td = timedelta(hours=value)
+                elif unit == 'd':
+                    lease_duration_td = timedelta(days=value)
+                elif unit == 'm':
+                    lease_duration_td = timedelta(minutes=value)
+                else:
+                    self.print(f"Warning: Unsupported duration unit '{unit}'. Falling back to 1 hour.")
+            except Exception as e:
+                self.print(f"Warning: Could not parse duration '{duration}': {e}. Falling back to 1 hour.")
 
         # Ensure keypair exists and matches the local key
         key_path = cloud_config.get("key_path", "~/.ssh/id_rsa.pub")
@@ -142,14 +536,13 @@ class Provider(CloudBaseManager):
                 raise VMProviderError(f"Failed to upload keypair {key_name}: {e}")
 
         # Print essential launch information
-        lease_duration = cloud_config.get("lease_duration", "1 hour")
         self.print(f"Launching VM with the following configuration:")
         self.print(f"  Server Name:    {name or f'vm-{self.cloud_name}'}")
         self.print(f"  Image:          {image_name}")
         self.print(f"  Flavor:         {flavor_name}")
         self.print(f"  Key Name:       {key_name}")
         self.print(f"  Security Group: {security_group}")
-        self.print(f"  Lease Length:   {lease_duration}")
+        self.print(f"  Lease Length:   {lease_duration_td}")
 
         try:
             # 1. Mandatory Reservation for Chameleon flavored images
@@ -174,7 +567,7 @@ class Provider(CloudBaseManager):
             # Use the high-level chi.lease.Lease pattern from standalone tests
             lease = chi.lease.Lease(
                 res_name,
-                duration=timedelta(hours=1)
+                duration=lease_duration_td
             )
 
             # We must reserve the specific flavor being requested
@@ -289,9 +682,9 @@ class Provider(CloudBaseManager):
                 # Use 'cc' for images starting with CC-, otherwise use config username
                 ssh_user = "cc" if image_name and image_name.startswith("CC-") else username
                 self.print(f"\nVM is ready! You can SSH in using:")
-                self.print(f"ssh -i {os.path.expanduser(cloud_config.get('key_path', '~/.ssh/id_rsa'))} {ssh_user}@{fip_addr}")
+                self.print(f"ssh -i {os.path.expanduser(cloud_config.get('key_path', '~/.ssh/id_rsa'))} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null {ssh_user}@{fip_addr}")
 
-            return s.id
+            return vm_name
         except Exception as e:
             from cloudmesh.ai.vm.logger import logger
             tb = traceback.format_exc()
@@ -408,49 +801,229 @@ class Provider(CloudBaseManager):
             logger.error(f"CHI delete failed for {name}: {e}")
             raise VMProviderError(f"CHI delete failed for {name}: {e}") from e
         
+    def _resolve_flavor_name(self, flavor_val: Any, flavor_map: Optional[Dict[str, str]] = None) -> str:
+        """
+        Resolves a flavor value (which could be a flavor object, a flavor ID,
+        or a 'reservation:UUID' string) to a human-readable flavor name.
+        """
+        if not flavor_val:
+            return "Unknown"
+
+        if hasattr(flavor_val, 'name'):
+            return flavor_val.name
+
+        if isinstance(flavor_val, str):
+            lookup_val = flavor_val
+            is_reservation = False
+            if flavor_val.startswith('reservation:'):
+                lookup_val = flavor_val.split(':', 1)[1]
+                is_reservation = True
+
+            try:
+                # 1. Try to resolve from the provided map first (efficient)
+                if flavor_map and lookup_val in flavor_map:
+                    return flavor_map[lookup_val]
+
+                # 2. Try to resolve as a standard flavor (ID or Name) from the cloud
+                if not flavor_map:
+                    flavors = chi.server.list_flavors()
+                    for f in flavors:
+                        if getattr(f, 'id', None) == lookup_val or getattr(f, 'name', None) == lookup_val:
+                            return f.name
+
+                # 3. If it was marked as a reservation or not found as a flavor, try resolving as a lease
+                if is_reservation or (len(lookup_val) == 36 and lookup_val.count('-') == 4):
+                    try:
+                        lease = chi.lease.Lease(lookup_val)
+                        reserved_flavors = lease.get_reserved_flavors()
+                        if reserved_flavors:
+                            return reserved_flavors[0].name
+                    except Exception as e:
+                        logger.debug(f"Lease lookup failed for {lookup_val}: {e}")
+            except Exception as e:
+                logger.debug(f"Could not resolve flavor {flavor_val}: {e}")
+
+            return flavor_val
+
+        return str(flavor_val)
+
+    def _format_networks(self, addresses: Any) -> str:
+        """
+        Formats the addresses dictionary into a human-readable string.
+        """
+        if not addresses or not isinstance(addresses, dict):
+            return "Unknown"
+
+        net_strings = []
+        for net_name, addr_list in addresses.items():
+            if not addr_list:
+                continue
+
+            addr_strings = []
+            for addr in addr_list:
+                if isinstance(addr, dict):
+                    ip = addr.get('addr', 'Unknown')
+                    ip_type = addr.get('OS-EXT-IPS:type', 'unknown')
+                    addr_strings.append(f"{ip_type}:{ip}")
+                else:
+                    addr_strings.append(str(addr))
+
+            net_strings.append(f"{net_name} ({', '.join(addr_strings)})")
+
+        return ", ".join(net_strings) if net_strings else "No Networks"
+
     def list(self) -> List[Dict[str, Any]]:
         """Lists all Chameleon VMs with their reachable IP addresses."""
         self._setup_chi_context()
         try:
             servers = chi.server.list_servers()
+
+            # Fetch all flavors to create a mapping of ID -> Name
+            flavor_map = {}
+            try:
+                all_flavors = chi.server.list_flavors()
+                for f in all_flavors:
+                    # Store by both ID and Name just in case
+                    f_id = getattr(f, 'id', None)
+                    f_name = getattr(f, 'name', None)
+                    if f_id: flavor_map[f_id] = f_name
+                    if f_name: flavor_map[f_name] = f_name
+            except Exception as e:
+                logger.debug(f"Could not fetch flavor map: {e}")
+
             print(f"Found {len(servers)} servers.")
             results = []
-            
-            for s in servers:    
-                # Safely extract the IP address from the addresses dictionary
-                ip = "No IP"
+
+            for s in servers:
+                all_ips = []
                 addresses = getattr(s, 'addresses', None)
                 if addresses and isinstance(addresses, dict):
                     for net_name, addr_list in addresses.items():
-                        if addr_list and len(addr_list) > 0:
-                            first_addr = addr_list[0]
-                            if isinstance(first_addr, dict):
-                                ip = first_addr.get('addr', str(first_addr))
+                        for addr in addr_list:
+                            if isinstance(addr, dict):
+                                all_ips.append(addr.get('addr', str(addr)))
                             else:
-                                ip = str(first_addr)
-                            break  # Grab the first available IP and exit loop
-                
+                                all_ips.append(str(addr))
+                ip = ", ".join(all_ips) if all_ips else "No IP"
+
+                # Resolve flavor name
+                flavor_val = getattr(s, 'flavor', None)
+                flavor_name = self._resolve_flavor_name(flavor_val, flavor_map=flavor_map)
+
+                if flavor_name == "Unknown" or flavor_name.startswith("reservation:"):
+                    flavor_name = self._resolve_flavor_name(getattr(s, 'flavor_name', None), flavor_map=flavor_map)
+
                 results.append({
                     "name": s.name,
                     "id": s.id,
                     "status": s.status,
                     "ip": ip,
                     "image": getattr(s, 'image_name', 'Unknown'),
-                    "flavor": getattr(s, 'flavor_name', 'Unknown'),
-                    "networks": addresses if addresses else {}
+                    "flavor": flavor_name,
+                    "networks": self._format_networks(addresses)
                 })
-                
+
             return results
         except Exception as e:
             from cloudmesh.ai.vm.logger import logger
             logger.warning(f"CHI list failed: {e}")
             return []
 
-    def info(self, name: str) -> Dict[str, Any]:
+    def _get_flavor_info(self, server) -> tuple[str, str, str]:
+        """
+        Helper to resolve flavor name, RAM, and CPUs. 
+        For reservation-backed VMs, the flavor string itself is the reservation ID.
+        """
+        flavor_name = "N/A"
+        ram = "N/A"
+        vcpus = "N/A"
+
+        try:
+            # 1. Resolve flavor reference from server attributes or dict
+            flavor_ref = getattr(server, "flavor", None)
+            if not flavor_ref and hasattr(server, "get"):
+                flavor_ref = server.get("flavor_name")
+            if not flavor_ref:
+                flavor_ref = getattr(server, "flavor_name", None)
+
+            if isinstance(flavor_ref, dict):
+                flavor_name = flavor_ref.get("id") or flavor_ref.get("name", "N/A")
+                ram_val = flavor_ref.get("ram")
+                if ram_val:
+                    ram = f"{ram_val} MB"
+                vcpus = flavor_ref.get("vcpus", "N/A")
+            else:
+                flavor_name = self._resolve_flavor_name(flavor_ref)
+                if flavor_name == "Unknown":
+                    flavor_id = getattr(server, "flavor_id", None)
+                    flavor_name = self._resolve_flavor_name(flavor_id)
+
+            # 2. Query connection flavors using the connection attached to the server object
+            conn = getattr(server, "conn", None)
+            if conn and flavor_name != "N/A":
+                try:
+                    for f in conn.compute.flavors():
+                        if getattr(f, "id", None) == flavor_name or getattr(f, "name", None) == flavor_name:
+                            ram_val = getattr(f, "ram", None)
+                            if ram_val:
+                                ram = f"{ram_val} MB"
+                            vcpus = getattr(f, "vcpus", "N/A")
+                            break
+                except Exception as inner_e:
+                    if hasattr(self, "DEBUG"):
+                        self.DEBUG(f"Could not query connection flavors: {inner_e}")
+
+        except Exception as e:
+            if hasattr(self, "DEBUG"):
+                self.DEBUG(f"Could not resolve flavor details: {e}")
+
+        return flavor_name, ram, vcpus
+
+
+    
+    def _get_basic_info(self, name: str) -> Dict[str, Any]:
+        """Gets detailed information about a Chameleon VM."""
+        try:
+            server = chi.server.get_server(name)
+
+            if not server:
+                raise VMResourceError(f"VM {name} not found")
+
+            floating_ip = self._get_floating_ip(name)
+            key_name = getattr(server, 'key_name', None) or (server.keypair.name if hasattr(server, 'keypair') and server.keypair else "N/A")
+
+            # Call the helper function to get readable flavor metadata
+            flavor_name, ram, vcpus = self._get_flavor_info(server)
+
+            return {
+                "Name": server.name,
+                "ID": server.id,
+                "State": server.status,
+                "Created": server.created_at,
+                "Image": server.image_name,
+                "Flavor": flavor_name,
+                "Key": key_name,
+                "FloatingIP": floating_ip or "Not Assigned",
+                "PublicIPs": server.addresses if getattr(server, 'addresses', None) else {},
+                "RAM": ram,
+                "CPUs": vcpus,
+            }
+        except VMResourceError:
+            raise
+        except Exception as e:
+            from cloudmesh.ai.vm.logger import logger
+            logger.error(f"Error getting info for VM {name} in {self.cloud_name}: {e}")
+            raise VMProviderError(f"Error getting info for VM {name} in {self.cloud_name}: {e}") from e
+        
+    def info_old(self, name: str) -> Dict[str, Any]:
         """Gets detailed information about a Chameleon VM."""
         self._setup_chi_context()
         try:
             server = chi.server.get_server(name)
+            from pprint import pprint
+            pprint(server.__dict__)
+
+
             if not server:
                 raise VMResourceError(f"VM {name} not found")
 
@@ -460,6 +1033,9 @@ class Provider(CloudBaseManager):
                 "Name": server.name,
                 "ID": server.id,
                 "State": server.status,
+                "Created": server.created_at,
+                "Image": server.image_name,
+                "Key": server.keypair,
                 "FloatingIP": floating_ip or "Not Assigned",
                 "PublicIPs": server.addresses if getattr(server, 'addresses', None) else [],
                 "RAM": getattr(server, 'ram', 'N/A'),
@@ -496,7 +1072,7 @@ class Provider(CloudBaseManager):
         except Exception:
             user = cloud_config.get("username", "ubuntu")
 
-        self.print(f"Connect to your VM using:\nssh -i {key_path} {user}@{floating_ip}")
+        self.print(f"Connect to your VM using:\nssh -i {key_path} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null {user}@{floating_ip}")
         return True
 
     def _get_floating_ip(self, name: str) -> Optional[str]:

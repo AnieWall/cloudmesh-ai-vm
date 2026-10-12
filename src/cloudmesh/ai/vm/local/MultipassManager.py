@@ -164,7 +164,7 @@ class Provider(LocalBaseManager):
         except Exception as e:
             raise VMProviderError(f"Error listing Multipass VMs: {e}")
 
-    def info(self, name: str) -> Dict[str, Any]:
+    def info(self, name: str, kind: str = "vm") -> Dict[str, Any]:
         """Gets detailed information about a Multipass VM."""
         if not name or not self.exists(name):
             raise VMResourceError(f"VM {name} not found in multipass.")

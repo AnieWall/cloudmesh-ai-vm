@@ -343,7 +343,7 @@ class OpenstackManager(CloudBaseManager):
             logger.error(f"SDK list failed: {e}")
             return []
 
-    def info(self, name: str) -> Dict[str, Any]:
+    def info(self, name: str, kind: str = "vm") -> Dict[str, Any]:
         """
         Gets detailed information about an OpenStack VM.
         """
@@ -389,7 +389,7 @@ class OpenstackManager(CloudBaseManager):
         key_path = cloud_config.get("key_path", "~/.ssh/id_rsa")
         user = cloud_config.get("user", "ubuntu")
 
-        self.print(f"Connect to your VM using:\nssh -i {key_path} {user}@{floating_ip}")
+        self.print(f"Connect to your VM using:\nssh -i {key_path} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null {user}@{floating_ip}")
         return True
 
     def suspend(self, name: Optional[str] = None) -> bool:

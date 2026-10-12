@@ -111,7 +111,7 @@ class Provider(LocalBaseManager):
         except Exception:
             return []
 
-    def info(self, name: str) -> Dict[str, Any]:
+    def info(self, name: str, kind: str = "vm") -> Dict[str, Any]:
         """
         Gets detailed information about a Lima VM.
         """

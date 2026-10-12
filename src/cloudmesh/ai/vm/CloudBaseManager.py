@@ -1,6 +1,13 @@
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional
+from pathlib import Path
+import os
+import yaml
 from rich.text import Text
+from typing import Any
+from rich import print as rprint
+from rich.pretty import Pretty
+
 from .base import BaseVMProvider
 
 class CloudBaseManager(BaseVMProvider, ABC):
@@ -9,9 +16,47 @@ class CloudBaseManager(BaseVMProvider, ABC):
     All cloud providers (OpenStack, Multipass, etc.) must implement this interface.
     """
 
+    def DEBUG(self, message: Any):
+        if isinstance(message, dict):
+            # Pretty print the dictionary with syntax highlighting
+            rprint(Pretty(message))  
+        else:
+            # Print non-dict messages in bold blue
+            rprint(Text(str(message), style="bold blue"))
+
     def __init__(self, config: Any, console=None, **kwargs):
         super().__init__(config)
         self.console = console
+
+    def _get_default_vm(self, cloud_name: str = "chameleon") -> Optional[str]:
+        """
+        Attempts to retrieve the last used or default VM name for the specified cloud
+        from cloudmesh configuration or a local state file.
+        """
+        # 1. Check if a local state file (e.g., ~/.config/cloudmesh/last_vm.<cloud_name>) exists
+        state_file = Path(os.path.expanduser(f"~/.config/cloudmesh/last_vm.{cloud_name}"))
+        if state_file.exists():
+            vm_name = state_file.read_text().strip()
+            if vm_name:
+                return vm_name
+
+        # 2. Fallback: Read from ~/.config/cloudmesh/clouds.yaml if applicable
+        config_path = Path(os.path.expanduser("~/.config/cloudmesh/clouds.yaml"))
+        if config_path.exists():
+            try:
+                with open(config_path, "r") as f:
+                    config_data = yaml.safe_load(f)
+                    # Check for a default VM configured under the specific cloud or profile
+                    clouds = config_data.get("clouds", {})
+                    cloud_cfg = clouds.get(cloud_name, {})
+                    if isinstance(cloud_cfg, dict):
+                        default_vm = cloud_cfg.get("default_vm")
+                        if default_vm:
+                            return default_vm
+            except Exception as e:
+                self.DEBUG(f"Error reading clouds.yaml: {e}")
+
+        return None
 
     def get_cloud_config(self, cloud_name: str) -> Dict[str, Any]:
         """
@@ -83,9 +128,24 @@ class CloudBaseManager(BaseVMProvider, ABC):
         """Resets a VM or the provider service."""
         return super().reset(name)
 
-    def info(self, name: str) -> Dict[str, Any]:
-        """Gets detailed information about a specific VM."""
-        return super().info(name)
+    def info(self, name: Optional[str] = None, kind: str = "vm") -> Dict[str, Any]:
+            """
+            Gets detailed information about a specific VM.
+            If name is missing, attempts to read it from the last_vm state file 
+            or cloudmesh configuration.
+            """
+            if not name:
+                cloud_name = getattr(self, "cloud_name", "chameleon")
+                name = self._get_default_vm(cloud_name)
+                
+                if not name:
+                    self.print(f"[red]Error: Missing argument 'NAME' and no default VM found for cloud '{cloud_name}'.[/red]")
+                    return {}
+                
+                self.print(f"[yellow]No VM name provided. Using default/last VM: {name}[/yellow]")
+
+            # Delegate to the underlying provider implementation (or super class)
+            return super().info(name, kind=kind)
 
     def get_security_groups(self) -> List[Dict[str, Any]]:
         """Lists available security groups for the current cloud."""

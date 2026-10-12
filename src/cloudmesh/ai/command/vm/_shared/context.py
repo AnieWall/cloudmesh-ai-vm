@@ -97,12 +97,28 @@ def resolve_vm_name(ctx: click.Context, name: Optional[str]) -> str:
 
     provider = get_active_provider(ctx)
     cloud_name = provider.cloud_name
+
+    # 1. Try the cached last VM
     last_vm = state.get_last_vm(cloud_name)
-
     if last_vm:
-        return last_vm
+        # Verify it still exists and is ACTIVE
+        try:
+            info = provider.info(last_vm)
+            if info and info.get("State", "").lower() in ("active", "running"):
+                return last_vm
+        except Exception:
+            pass
 
-    raise click.ClickException("No VM name provided and no recent VM found in session. Please provide a name.")
+    # 2. Fallback: If there's exactly one active VM, use it
+    try:
+        all_vms = provider.list()
+        active_vms = [vm["name"] for vm in all_vms if vm.get("status", "").lower() in ("active", "running")]
+        if len(active_vms) == 1:
+            return active_vms[0]
+    except Exception:
+        pass
+
+    raise click.ClickException("No VM name provided and no active VM found in session. Please provide a name or use 'cmx vm list' to find one.")
 
 def vm_options(f):
     """Decorator to add common VM options."""

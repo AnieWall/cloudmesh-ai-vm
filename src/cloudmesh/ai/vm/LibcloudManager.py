@@ -199,7 +199,7 @@ class LibcloudManager(CloudBaseManager, ABC):
             logger.error(f"Error listing VMs in {self.cloud_name}: {e}")
             return []
 
-    def info(self, name: str) -> Dict[str, Any]:
+    def info(self, name: str, kind: str = "vm") -> Dict[str, Any]:
         """
         Gets detailed information about a specific VM using libcloud.
         """

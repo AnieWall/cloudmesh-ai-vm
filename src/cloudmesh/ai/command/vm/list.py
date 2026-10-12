@@ -3,6 +3,8 @@ from typing import Optional
 from ._shared.context import console, get_active_provider, vm_options
 from ._shared.exceptions import handle_errors
 from ._shared.ui import render_table
+import json        
+import yaml    
 
 @click.group(invoke_without_command=True)
 @click.pass_context
@@ -29,9 +31,10 @@ def _render_vms(cloud_name, vms):
             ip = getattr(vm, "ip", vm.get("ip") if isinstance(vm, dict) else "Unknown")
             image = getattr(vm, "image", vm.get("image") if isinstance(vm, dict) else "Unknown")
             flavor = getattr(vm, "flavor", vm.get("flavor") if isinstance(vm, dict) else "Unknown")
+            ttl = getattr(vm, "ttl", vm.get("ttl") if isinstance(vm, dict) else "N/A")
             networks = getattr(vm, "networks", vm.get("networks") if isinstance(vm, dict) else "Unknown")
-            rows.append([name, status, ip, image, flavor, networks])
-        render_table(table_title, ["Name", "Status", "IP", "Image", "Flavor", "Networks"], rows)
+            rows.append([name, status, ip, image, flavor, ttl, networks])
+        render_table(table_title, ["Name", "Status", "IP", "Image", "Flavor", "TTL", "Networks"], rows)
         return True
     return False
 

@@ -213,7 +213,7 @@ class Provider(CloudBaseManager):
             logger.error(f"OCI list failed: {e}")
             return []
 
-    def info(self, name: str) -> Dict[str, Any]:
+    def info(self, name: str, kind: str = "vm") -> Dict[str, Any]:
         """Gets detailed info for an Oracle VM."""
         if not self.exists(name):
             raise VMResourceError(f"Oracle VM {name} not found")

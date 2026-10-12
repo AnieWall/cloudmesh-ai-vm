@@ -74,7 +74,7 @@ class BaseVMProvider(ABC):
         """Lists all VMs in the cloud."""
         raise ProviderFeatureNotSupported(self.cloud_name, "list")
 
-    def info(self, name: str) -> Dict[str, Any]:
+    def info(self, name: str, kind: str = "vm") -> Dict[str, Any]:
         """Gets detailed info for a specific VM."""
         raise ProviderFeatureNotSupported(self.cloud_name, "info")
 
