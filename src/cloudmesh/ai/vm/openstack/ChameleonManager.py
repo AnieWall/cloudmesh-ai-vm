@@ -102,6 +102,7 @@ class Provider(CloudBaseManager):
         security_group = cloud_config.get("security_group", "default")
         key_name = cloud_config.get("key_name")
         username = cloud_config.get("username", "user")
+        assign_ip = kwargs.get("assign_ip", True)
 
         # Ensure keypair exists or is assigned
         try:

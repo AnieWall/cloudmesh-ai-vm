@@ -193,7 +193,7 @@ def test_chameleon_smoke(temp_config, ssh_key):
 
     finally:
         # Print the benchmark results
-        save_benchmark(tag=f"Chameleon Smoke {vm_name}", config_path=temp_config)
+        save_benchmark(tag="chameleon-smoke", config_path=temp_config)
 
         # Cleanup in case of failure
         try:

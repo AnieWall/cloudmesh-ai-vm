@@ -283,7 +283,7 @@ def test_provider_lifecycle(provider_cfg, tmp_path, ssh_key):
         print(f"\nSmoke test for {provider_cfg.name} passed successfully!")
 
     finally:
-        save_benchmark(tag=f"{provider_cfg.name.capitalize()} Smoke", config_path=temp_config)
+        save_benchmark(tag=f"{provider_cfg.name}-smoke", config_path=temp_config)
         try:
             if provider.exists(vm_name):
                 provider.delete(vm_name)

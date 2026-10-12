@@ -15,7 +15,7 @@
 - **Security Management**: Create, assign, and manage firewall rules for your VMs directly from the CLI (with smart-presets for web and database servers).
 - **SSH Integration**: Generate suggested SSH configuration entries for existing VMs to enable seamless access via `ssh <hostname>`.
 - **Interactive Shell**: Enter a dedicated VM management shell using `cmx vm -i`.
-- **Libcloud Native**: OpenStack providers (Chameleon, Jetstream) are implemented strictly using the Libcloud driver for improved stability and consistency.
+- **SDK Native**: OpenStack providers (Chameleon, Jetstream) are implemented using the official OpenStack SDK for maximum stability and feature support.
 
 The full documentation is available at: <https://cloudmesh-ai.github.io/cloudmesh-ai-vm/>
 

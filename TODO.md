@@ -4,12 +4,6 @@
 (All core stability items implemented)
 
 ## Medium Priority (Feature Parity)
-- [ ] **Lifecycle Parity**: Implement `restart`, `reset`, and `suspend` for all cloud-based providers (AWS, Azure, Google, Oracle) to match local provider capabilities.
-- [ ] **Expand Security Group Support**: Implement `create_security_group` and `add_security_group_rule` for Azure and Google providers.
-- [x] **Network Feature Parity**: Implement `assign_floating_ip` and `release_floating_ip` for AWS, Azure, and Google providers.
-- [ ] **Region Discovery**: Implement `list_regions` for all cloud-based providers to allow users to switch regions via CLI.
-- [ ] **Key Management Parity**: Implement `upload_key` and `delete_key` consistently across all providers. 
-    - *Note: Not supported for local providers (WSL2, VBox, Lima) as they use host-based SSH keys.*
 - [ ] NOT NEEDED: **Key Rotation**: Add `rotate_key` to `BaseVMProvider` and implement it for providers that support SSH key updates.
 
 ## Low Priority (UX & Polish)
