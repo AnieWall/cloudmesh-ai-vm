@@ -223,17 +223,51 @@ class Provider(CloudBaseManager):
 
             s.refresh()
 
-            # 3. OPEN PORT 22 (SSH) IN SECURITY GROUPS
-            self.print("Configuring security groups for SSH...")
-            sg_list = network.list_security_groups(name_filter="allow-ssh")
-            if sg_list:
-                sg = sg_list[0]
+            # 3. OPEN PORT 22 (SSH) AND ICMP (PING) IN SECURITY GROUPS
+            self.print("Configuring security groups for SSH and ICMP...")
+            sg_name = f"{username.replace('_', '-')}-allow-ssh"
+            sg_list = network.list_security_groups(name_filter=sg_name)
+
+            # Find exact match to avoid partial name collisions
+            sg = next((g for g in sg_list if getattr(g, 'name', None) == sg_name), None)
+
+            if sg:
+                self.print(f"✅ Found existing security group: {sg_name}")
+                sg_id = sg.id
             else:
-                sg = network.SecurityGroup(
-                    {"name": "allow-ssh", "description": "Enable SSH traffic on TCP port 22"}
+                self.print(f"Creating new security group: {sg_name}...")
+                new_sg = network.SecurityGroup(
+                    {"name": sg_name, "description": f"Enable SSH and ICMP traffic for {username}"}
                 )
-                sg.add_rule("ingress", "tcp", 22)
-                sg.submit()
+                new_sg.submit()
+                sg_id = new_sg.id
+
+            # Ensure the required rules are present using the raw neutron client to avoid wrapper constraints
+            # and handle existing rules gracefully (Neutron returns 409 Conflict if rule exists)
+            for rule in [
+                {"protocol": "tcp", "port": 22},
+                {"protocol": "icmp", "port": None},
+            ]:
+                try:
+                    network.neutron().create_security_group_rule(
+                        {
+                            "security_group_rule": {
+                                "direction": "ingress",
+                                "protocol": rule["protocol"],
+                                "port_range_min": rule["port"],
+                                "port_range_max": rule["port"],
+                                "security_group_id": sg_id,
+                            }
+                        }
+                    )
+                    self.print(f"✅ Added {rule['protocol']} rule to {sg_name}")
+                except Exception as e:
+                    if "Conflict" in str(e) or "409" in str(e):
+                        self.print(f"  Rule for {rule['protocol']} already exists, skipping...")
+                    else:
+                        self.print(f"  Warning: Could not add {rule['protocol']} rule: {e}")
+
+            self.print(f"✅ Security group {sg_name} configured with SSH and ICMP rules")
 
             # Attach security group to the server instance
             s.add_security_group(sg.id)
@@ -442,16 +476,30 @@ class Provider(CloudBaseManager):
         self.print(f"Connect to your VM using:\nssh -i {key_path} {user}@{floating_ip}")
         return True
 
-    def _get_floating_ip(self, name: str) -> Optional[str]:
-        """Internal helper to retrieve the floating IP address of a VM."""
+    def _resolve_sg_id(self, sg_name: str) -> str:
+        """
+        Resolves a security group name to an ID.
+        If multiple groups with the same name exist, returns the first one's ID.
+        """
         self._setup_chi_context()
         try:
-            server = chi.server.get_server(name)
-            if server and getattr(server, 'addresses', None):
-                return server.addresses[0]
-            return None
+            # Try the standard resolver first
+            sg = chi.network._resolve_resource("security_group", sg_name)
+            if isinstance(sg, dict):
+                return sg['id']
+            return getattr(sg, 'id', sg_name)
         except Exception:
-            return None
+            # Fallback: manually list and find the first match
+            groups = chi.network.list_security_groups()
+            for g in groups:
+                if g['name'] == sg_name:
+                    return g['id']
+
+        # If it's already a UUID, return it as is
+        if len(sg_name) == 36 and sg_name.count('-') == 4:
+            return sg_name
+
+        raise VMResourceError(f"Could not resolve security group {sg_name} to an ID")
 
     def assign_floating_ip(self, name: str) -> Optional[str]:
         """Assigns an available floating IP to the VM with retries for network routing."""
@@ -461,7 +509,6 @@ class Provider(CloudBaseManager):
             if not server:
                 return None
 
-            import chi.exception
             for i in range(10):
                 try:
                     return server.associate_floating_ip()
@@ -680,10 +727,15 @@ class Provider(CloudBaseManager):
         self._setup_chi_context()
         try:
             server = chi.server.get_server(vm_name)
-            if server:
-                server.add_security_group(sg_name)
-                return True
-            return False
+            if not server:
+                return False
+
+            # Resolve SG name to ID to avoid ambiguity
+            sg = chi.network._resolve_resource("security_group", sg_name)
+            sg_id = sg['id'] if isinstance(sg, dict) else getattr(sg, 'id', sg_name)
+
+            server.add_security_group(sg_id)
+            return True
         except Exception as e:
             from cloudmesh.ai.vm.logger import logger
             logger.error(f"CHI add_security_group_to_vm failed for {vm_name}: {e}")

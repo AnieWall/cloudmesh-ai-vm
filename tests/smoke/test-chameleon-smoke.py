@@ -24,7 +24,7 @@ def temp_config(tmp_path):
         "username": "smoke_test_user",
         "clouds": {
             "chameleon": {
-                "image": "ubuntu-22.04",
+                "image": "CC-Ubuntu22.04",
                 "flavor": "m1.small",
             }
         }
