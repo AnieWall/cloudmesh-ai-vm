@@ -80,7 +80,6 @@ class Provider(CloudBaseManager):
             server = chi.server.get_server(name)
             return server.status if server else ""
         except Exception as e:
-            from cloudmesh.ai.vm.logger import logger
             logger.debug(f"Error getting status for VM {name}: {e}")
             return ""
 
@@ -100,43 +99,47 @@ class Provider(CloudBaseManager):
         image_name = image or cloud_config.get("image")
         flavor_name = flavor or cloud_config.get("flavor")
         security_group = cloud_config.get("security_group", "default")
-        key_name = cloud_config.get("key_name")
-        username = cloud_config.get("username", "user")
+
+        username = cloud_config.get("username", "user").replace('_', '-')
+        key_name = cloud_config.get("key_name", username)
         assign_ip = kwargs.get("assign_ip", True)
 
-        # Ensure keypair exists or is assigned
+        # Ensure keypair exists and matches the local key
+        key_path = cloud_config.get("key_path", "~/.ssh/id_rsa.pub")
+        key_filename = os.path.expanduser(key_path)
+
         try:
-            existing_keys = [k.name for k in chi.server.list_keypair()]
+            existing_keys = {k.name: k.public_key for k in chi.server.list_keypair()}
         except Exception as e:
             self.print(f"Warning: Could not list keypairs: {e}")
-            existing_keys = []
+            existing_keys = {}
 
-        if not key_name:
-            if existing_keys:
-                key_name = existing_keys[0]
-                self.print(f"Using existing keypair: {key_name}")
+        # Read the local public key to verify against the cloud
+        try:
+            with open(key_filename, 'r') as f:
+                local_pub_key = f.read().strip()
+        except Exception as e:
+            raise VMProviderError(f"Could not read local public key at {key_filename}: {e}")
+
+        if key_name in existing_keys:
+            if existing_keys[key_name] == local_pub_key:
+                self.print(f"✅ Using existing matching keypair: {key_name}")
             else:
-                key_name = username
-                self.print(f"No keypair found. Uploading new keypair as: {key_name}")
-                key_path = cloud_config.get("key_path", "~/.ssh/id_rsa.pub")
-                key_filename = os.path.expanduser(key_path)
+                self.print(f"Keypair {key_name} exists but does not match local key. Updating...")
                 try:
-                    chi.keypair.Keypair(keypair_public_key=key_filename, key_name=key_name)
-                    self.print(f"✅ Keypair {key_name} uploaded and ready")
+                    chi.server.update_keypair(key_name, local_pub_key)
+                    self.print(f"✅ Keypair {key_name} updated with local key")
                 except Exception as e:
-                    raise VMProviderError(f"Failed to upload keypair {key_name}: {e}")
+                    raise VMProviderError(f"Failed to update keypair {key_name}: {e}")
         else:
-            if key_name not in existing_keys:
-                self.print(f"Keypair {key_name} not found in cloud. Uploading...")
-                key_path = cloud_config.get("key_path", "~/.ssh/id_rsa.pub")
-                key_filename = os.path.expanduser(key_path)
-                try:
-                    chi.keypair.Keypair(keypair_public_key=key_filename, key_name=key_name)
-                    self.print(f"✅ Keypair {key_name} uploaded and ready")
-                except Exception as e:
-                    raise VMProviderError(f"Failed to upload keypair {key_name}: {e}")
-            else:
-                self.print(f"✅ Using existing keypair: {key_name}")
+            self.print(f"Keypair {key_name} not found in cloud. Uploading...")
+            try:
+                # The chi.keypair.Keypair wrapper expects a path to a file, not the key content.
+                # To ensure the key is uploaded correctly, we use the filename.
+                chi.keypair.Keypair(keypair_public_key=key_filename, key_name=key_name)
+                self.print(f"✅ Keypair {key_name} uploaded and ready")
+            except Exception as e:
+                raise VMProviderError(f"Failed to upload keypair {key_name}: {e}")
 
         # Print essential launch information
         lease_duration = cloud_config.get("lease_duration", "1 hour")
@@ -162,7 +165,7 @@ class Provider(CloudBaseManager):
                 attempt += 1
 
             if not name and self.cloud_name in ["jetstream", "chameleon"]:
-                username_fmt = cloud_config.get("username", "user").replace("_", "-")
+                username_fmt = cloud_config.get("username", "user")
                 site = cloud_config.get("site", self.cloud_name).replace("_", "-").replace("@", "").lower()
                 vm_name = f"{vm_name}-{username_fmt}" if site == self.cloud_name else f"{vm_name}-{site}-{username_fmt}"
 
@@ -225,7 +228,7 @@ class Provider(CloudBaseManager):
 
             # 3. OPEN PORT 22 (SSH) AND ICMP (PING) IN SECURITY GROUPS
             self.print("Configuring security groups for SSH and ICMP...")
-            sg_name = f"{username.replace('_', '-')}-allow-ssh"
+            sg_name = f"{username}-allow-ssh"
             sg_list = network.list_security_groups(name_filter=sg_name)
 
             # Find exact match to avoid partial name collisions
@@ -270,12 +273,23 @@ class Provider(CloudBaseManager):
             self.print(f"✅ Security group {sg_name} configured with SSH and ICMP rules")
 
             # Attach security group to the server instance
-            s.add_security_group(sg.id)
+            s.add_security_group(sg_id)
 
             # 4. PRINT SSH CONNECTION DETAILS
             if fip_addr:
+                # Clear stale host key for the floating IP to avoid "Host key verification failed"
+                # This is common in cloud environments where IPs are recycled.
+                try:
+                    import subprocess
+                    subprocess.run(["ssh-keygen", "-R", fip_addr], capture_output=True, check=False)
+                    self.print(f"✅ Cleared stale host key for {fip_addr} to ensure seamless SSH connection")
+                except Exception as e:
+                    self.print(f"  Warning: Could not clear host key for {fip_addr}: {e}")
+
+                # Use 'cc' for images starting with CC-, otherwise use config username
+                ssh_user = "cc" if image_name and image_name.startswith("CC-") else username
                 self.print(f"\nVM is ready! You can SSH in using:")
-                self.print(f"ssh cc@{fip_addr}")
+                self.print(f"ssh -i {os.path.expanduser(cloud_config.get('key_path', '~/.ssh/id_rsa'))} {ssh_user}@{fip_addr}")
 
             return s.id
         except Exception as e:
@@ -471,10 +485,41 @@ class Provider(CloudBaseManager):
 
         cloud_config = self.get_cloud_config("chameleon")
         key_path = cloud_config.get("key_path", "~/.ssh/id_rsa")
-        user = cloud_config.get("user", "ubuntu")
+
+        # Use 'cc' for images starting with CC-, otherwise use config username
+        # Note: This requires fetching the server to check the image name
+        try:
+            server = chi.server.get_server(name)
+            image_name = getattr(server, 'image_name', None)
+            username = cloud_config.get("username", "ubuntu")
+            user = "cc" if image_name and image_name.startswith("CC-") else username
+        except Exception:
+            user = cloud_config.get("username", "ubuntu")
 
         self.print(f"Connect to your VM using:\nssh -i {key_path} {user}@{floating_ip}")
         return True
+
+    def _get_floating_ip(self, name: str) -> Optional[str]:
+        """Internal helper to retrieve the floating IP address of a VM."""
+        self._setup_chi_context()
+        try:
+            server = chi.server.get_server(name)
+            if not server:
+                return None
+            addresses = getattr(server, 'addresses', {})
+            if not addresses:
+                return None
+            for net_name, addr_list in addresses.items():
+                for addr in addr_list:
+                    if isinstance(addr, dict) and addr.get('OS-EXT-IPS:type') == 'floating':
+                        return addr.get('addr')
+                    elif isinstance(addr, str) and addr.startswith('129.'): # Heuristic for Chameleon FIPs
+                        return addr
+            return None
+        except Exception as e:
+            from cloudmesh.ai.vm.logger import logger
+            logger.debug(f"Error getting floating IP for VM {name}: {e}")
+            return None
 
     def _resolve_sg_id(self, sg_name: str) -> str:
         """
