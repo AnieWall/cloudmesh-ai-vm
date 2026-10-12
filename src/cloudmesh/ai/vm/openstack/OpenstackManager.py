@@ -137,12 +137,14 @@ class OpenstackManager(CloudBaseManager):
                     vm_name = f"{vm_name}-{site}-{username}"
 
             # Create server using SDK
+            network_name = self._get_default_network()
             server = conn.compute.create_server(
                 name=vm_name,
                 image_id=img.id,
                 flavor_id=flv.id,
                 key_name=key_name,
                 security_groups=[{"name": sg.name}],
+                networks=[{"uuid": network_name}] if network_name else [],
             )
 
             # Wait for the VM to actually be ACTIVE before proceeding to IP assignment
@@ -436,24 +438,15 @@ class OpenstackManager(CloudBaseManager):
     def get_images(self, **kwargs) -> List[Dict[str, Any]]:
         """
         Lists available images in OpenStack.
-        Falls back to OpenStack SDK if libcloud returns empty results.
         """
         try:
             from cloudmesh.ai.vm.logger import logger
-            logger.debug("Fetching images from OpenStack driver...")
-            images = self.driver.list_images()
-            if images:
-                logger.debug(f"Driver returned {len(images)} images.")
-                return [{"id": img.id, "name": img.name} for img in images]
-
-            logger.debug("Driver returned no images. Falling back to OpenStack SDK...")
+            logger.debug("Fetching images from OpenStack SDK...")
             conn = self._get_sdk_conn()
             sdk_images = conn.compute.images()
             images_list = [{"id": img.id, "name": img.name} for img in sdk_images]
-
-            logger.debug(f"SDK fallback returned {len(images_list)} images.")
+            logger.debug(f"SDK returned {len(images_list)} images.")
             return images_list
-
         except Exception as e:
             from cloudmesh.ai.vm.logger import logger
             logger.error(f"Error getting images: {e}")
@@ -462,24 +455,15 @@ class OpenstackManager(CloudBaseManager):
     def get_flavors(self, **kwargs) -> List[Dict[str, Any]]:
         """
         Lists available flavors in OpenStack.
-        Falls back to OpenStack SDK if libcloud returns empty results.
         """
         try:
             from cloudmesh.ai.vm.logger import logger
-            logger.debug("Fetching flavors from OpenStack driver...")
-            sizes = self.driver.list_sizes()
-            if sizes:
-                logger.debug(f"Driver returned {len(sizes)} flavors.")
-                return [{"id": s.id, "name": s.name, "ram": s.ram, "vcpus": s.vcpus} for s in sizes]
-
-            logger.debug("Driver returned no flavors. Falling back to OpenStack SDK...")
+            logger.debug("Fetching flavors from OpenStack SDK...")
             conn = self._get_sdk_conn()
             sdk_flavors = conn.compute.flavors()
             flavors = [{"id": f.id, "name": f.name, "ram": f.ram, "vcpus": f.vcpus} for f in sdk_flavors]
-
-            logger.debug(f"SDK fallback returned {len(flavors)} flavors.")
+            logger.debug(f"SDK returned {len(flavors)} flavors.")
             return flavors
-
         except Exception as e:
             from cloudmesh.ai.vm.logger import logger
             logger.error(f"Error getting flavors: {e}")
@@ -717,7 +701,28 @@ class OpenstackManager(CloudBaseManager):
             logger.error(f"Error deleting key {key_name}: {e}")
             return False
 
-    def _get_floating_ip(self, name: str) -> Optional[str]:
+    def _get_default_network(self) -> Optional[str]:
+        """
+        Finds a default network to use for VM creation.
+        Checks config first, then tries to find a usable network via SDK.
+        """
+        cloud_config = self.get_cloud_config(self.cloud_name)
+        network_name = cloud_config.get("network")
+        if network_name:
+            return network_name
+
+        try:
+            conn = self._get_sdk_conn()
+            networks = conn.network.networks()
+            if networks:
+                # Return the first available network
+                return networks[0].name
+        except Exception as e:
+            from cloudmesh.ai.vm.logger import logger
+            logger.debug(f"Could not find a default network for {self.cloud_name}: {e}")
+
+        return None
+
         """
         Internal helper to retrieve the floating IP address of a VM.
         """
