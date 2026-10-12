@@ -128,7 +128,7 @@ class Provider(CloudBaseManager):
             raise VMProviderError(f"OCI delete failed for {name}: {e}") from e
 
     def restart(self, name: Optional[str] = None) -> bool:
-        """Restarts an Oracle VM."""
+        """Restarts an Oracle VM using the native reboot command."""
         if not name:
             return False
         if not self.compute_client:
@@ -138,37 +138,49 @@ class Provider(CloudBaseManager):
             self.compute_client.instance_action(instance_id, "SOFTRESET")
             return True
         except Exception as e:
+            if isinstance(e, ProviderFeatureNotSupported):
+                raise e
             logger.error(f"OCI restart failed for {name}: {e}")
             return False
 
-    def reset(self, name: Optional[str] = None) -> bool:
-        """Resets an Oracle VM (Hard Reset)."""
-        if not name:
-            return False
-        if not self.compute_client:
-            return False
-        try:
-            instance_id = self._resolve_instance_id(name)
-            self.compute_client.instance_action(instance_id, "RESET")
-            return True
-        except Exception as e:
-            logger.error(f"OCI reset failed for {name}: {e}")
-            return False
-
     def suspend(self, name: Optional[str] = None) -> bool:
-        """Suspends an Oracle VM."""
+        """
+        Suspends an Oracle VM. In OCI, this is mapped to 'STOP' to release
+        compute resources and stop billing.
+        """
         if not name:
             return False
         if not self.compute_client:
             return False
         try:
             instance_id = self._resolve_instance_id(name)
-            # OCI doesn't have a direct 'suspend' equivalent in the same way as local,
-            # but we use STOP as a closest approximation or raise unsupported.
             self.compute_client.instance_action(instance_id, "STOP")
             return True
         except Exception as e:
             logger.error(f"OCI suspend failed for {name}: {e}")
+            return False
+
+    def reset(self, name: Optional[str] = None) -> bool:
+        """
+        Resets an Oracle VM. Performs a hard power cycle (stop -> start)
+        if the native reset fails.
+        """
+        if not name:
+            return False
+        if not self.compute_client:
+            return False
+        try:
+            # 1. Try the native reset first
+            instance_id = self._resolve_instance_id(name)
+            self.compute_client.instance_action(instance_id, "RESET")
+            return True
+        except Exception as e:
+            logger.info(f"Native reset failed for {name}. Performing hard reset (stop -> start)...")
+            try:
+                if self.stop(name):
+                    return self.start(name=name)
+            except Exception as stop_e:
+                logger.error(f"Hard reset failed during stop for {name}: {stop_e}")
             return False
 
     def list(self) -> List[Dict[str, Any]]:
