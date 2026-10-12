@@ -58,6 +58,11 @@ def info(ctx: click.Context,
         # YAML – this is now the *default* format
         # safe_dump keeps the output deterministic and human‑readable
         yaml_str = yaml.safe_dump(vm_info, sort_keys=False, default_flow_style=False)
+        # Replace yellow (default for some YAML values) with blue for IDs/UUIDs
+        import re
+        # Regex to match UUIDs: 8-4-4-4-12 hex chars
+        uuid_pattern = r'([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})'
+        yaml_str = re.sub(uuid_pattern, r'[blue]\1[/blue]', yaml_str)
         console.print(yaml_str)
 
     
