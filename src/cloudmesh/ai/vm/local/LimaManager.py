@@ -305,7 +305,7 @@ class Provider(LocalBaseManager):
         try:
             # Use limactl to get the SSH config
             # limactl show-ssh-config <name>
-            result = self._run_command(["limactl", "show-ssh-config", name], stream=False)
+            result = self._run_command(["limactl", "show-ssh", name], stream=False)
             if result.stdout:
                 return result.stdout.strip()
             return None
