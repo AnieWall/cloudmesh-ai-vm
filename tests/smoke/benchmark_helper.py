@@ -7,6 +7,7 @@ from contextlib import redirect_stdout
 import yaml
 from cloudmesh.ai.common.stopwatch import StopWatch
 from cloudmesh.ai.common.sys import systeminfo
+from typing import Optional
 
 import platform # these need to be removes and sysinfo needs to be used
 import sys      # these need to be removes and sysinfo needs to be used
