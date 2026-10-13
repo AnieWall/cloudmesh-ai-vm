@@ -30,17 +30,21 @@ def test_lima_cli_lifecycle(runner, config):
     Smoke test for Lima CLI lifecycle.
     """
     env = {"OS_CLOUD": "lima"}
+    
     # 1. providers
-    result = runner.invoke(vm.vm_group, ["provider", "list"], env=env)
+    with StopWatch.timer("lima_provider_list"):
+        result = runner.invoke(vm.vm_group, ["provider", "list"], env=env)
     assert result.exit_code == 0
     assert "lima" in result.output.lower()
 
     # 2. set
-    result = runner.invoke(vm.vm_group, ["provider", "set", "lima"], env=env)
+    with StopWatch.timer("lima_provider_set"):
+        result = runner.invoke(vm.vm_group, ["provider", "set", "lima"], env=env)
     assert result.exit_code == 0
 
     # 3. start (without name - test auto-naming)
-    result = runner.invoke(vm.vm_group, ["start"], env=env)
+    with StopWatch.timer("lima_start"):
+        result = runner.invoke(vm.vm_group, ["start"], env=env)
     if result.exit_code != 0:
         pytest.skip(f"Lima start failed: {result.output}")
 
@@ -58,44 +62,52 @@ def test_lima_cli_lifecycle(runner, config):
 
     try:
         # 4. list
-        result = runner.invoke(vm.vm_group, ["list"], env=env)
+        with StopWatch.timer("lima_list"):
+            result = runner.invoke(vm.vm_group, ["list"], env=env)
         assert result.exit_code == 0
-        # Check for the truncated name or prefix since Rich tables wrap/truncate long names
         plain_output = Text.from_ansi(result.output).plain
         assert vm_name[:12] in plain_output or "smoke-test-" in plain_output
-        
+
         # 5. run
-        result = runner.invoke(vm.vm_group, ["run", vm_name, "hostname"])
+        with StopWatch.timer("lima_run"):
+            result = runner.invoke(vm.vm_group, ["run", vm_name, "hostname"])
         if result.exit_code != 0:
             pytest.skip(f"Lima run failed: {result.output}")
 
         # 6. stop
-        result = runner.invoke(vm.vm_group, ["stop", vm_name], env=env)
+        with StopWatch.timer("lima_stop"):
+            result = runner.invoke(vm.vm_group, ["stop", vm_name], env=env)
         assert result.exit_code == 0
 
         # 7. delete
-        result = runner.invoke(vm.vm_group, ["delete", vm_name], env=env)
+        with StopWatch.timer("lima_delete"):
+            result = runner.invoke(vm.vm_group, ["delete", vm_name], env=env)
         assert result.exit_code == 0
 
         # 8. images
-        result = runner.invoke(vm.vm_group, ["image"], env=env)
+        with StopWatch.timer("lima_images"):
+            result = runner.invoke(vm.vm_group, ["image"], env=env)
         assert result.exit_code == 0
 
         # 9. flavors
-        result = runner.invoke(vm.vm_group, ["flavor"], env=env)
+        with StopWatch.timer("lima_flavors"):
+            result = runner.invoke(vm.vm_group, ["flavor"], env=env)
         assert result.exit_code == 0
 
         # 10. keys
-        result = runner.invoke(vm.vm_group, ["key", "list"], env=env)
+        with StopWatch.timer("lima_keys"):
+            result = runner.invoke(vm.vm_group, ["key", "list"], env=env)
         assert result.exit_code == 0
 
         # 11. security_groups
-        result = runner.invoke(vm.vm_group, ["security-group"], env=env)
+        with StopWatch.timer("lima_security_groups"):
+            result = runner.invoke(vm.vm_group, ["security-group"], env=env)
         assert result.exit_code == 0
 
         # 12. ssh_config
-        runner.invoke(vm.vm_group, ["start", vm_name], env=env)
-        result = runner.invoke(vm.vm_group, ["ssh-config"], env=env)
+        with StopWatch.timer("lima_ssh_config"):
+            runner.invoke(vm.vm_group, ["start", vm_name], env=env)
+            result = runner.invoke(vm.vm_group, ["ssh-config"], env=env)
         assert result.exit_code == 0
         assert "Host" in result.output
 
@@ -118,8 +130,6 @@ def test_lima_cli_lifecycle(runner, config):
             user=username
         )
         
-        # Optional: print or write the payload to a separate JSON file if desired
-
         print(json.dumps(payload, indent=2))
 
 def test_lima_cli_start_with_name(runner, config):
