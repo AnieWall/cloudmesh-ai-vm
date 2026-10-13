@@ -893,17 +893,43 @@ class Provider(CloudBaseManager):
         return ", ".join(net_strings) if net_strings else "No Networks"
 
     def list(self) -> List[Dict[str, Any]]:
-        """Lists all Chameleon VMs with their reachable IP addresses."""
+        """Lists all Chameleon VMs with their reachable IP addresses and TTL."""
         self._setup_chi_context()
         try:
             servers = chi.server.list_servers()
 
-            # Fetch all flavors to create a mapping of ID -> Name
+            # 1. Pre-fetch all leases once to build a lookup map for flavors and end_dates
+            # This avoids the "N+1" query problem and repeated authentication messages.
+            res_lookup = {}
+            try:
+                leases = chi.lease.list_leases()
+                for l in leases:
+                    end_date = getattr(l, "end_date", None) if not isinstance(l, dict) else l.get("end_date")
+                    res_types = ["flavor_reservations", "node_reservations", "fip_reservations", "network_reservations", "device_reservations"]
+                    for res_type in res_types:
+                        reservations = getattr(l, res_type, [])
+                        for res in reservations:
+                            r_id = res.get("id") if isinstance(res, dict) else getattr(res, "id", None)
+                            if r_id:
+                                props = res.get("resource_properties", {}) if isinstance(res, dict) else getattr(res, "resource_properties", {})
+                                if isinstance(props, str):
+                                    try:
+                                        props = json.loads(props)
+                                    except:
+                                        props = {}
+
+                                res_lookup[r_id] = {
+                                    "name": props.get("name") if isinstance(props, dict) else "Unknown",
+                                    "end_date": end_date
+                                }
+            except Exception as e:
+                logger.debug(f"Could not pre-fetch leases: {e}")
+
+            # 2. Fetch standard flavors for non-reservation VMs
             flavor_map = {}
             try:
                 all_flavors = chi.server.list_flavors()
                 for f in all_flavors:
-                    # Store by both ID and Name just in case
                     f_id = getattr(f, 'id', None)
                     f_name = getattr(f, 'name', None)
                     if f_id: flavor_map[f_id] = f_name
@@ -915,6 +941,7 @@ class Provider(CloudBaseManager):
             results = []
 
             for s in servers:
+                # Format IP addresses
                 all_ips = []
                 addresses = getattr(s, 'addresses', None)
                 if addresses and isinstance(addresses, dict):
@@ -926,18 +953,37 @@ class Provider(CloudBaseManager):
                                 all_ips.append(str(addr))
                 ip = ", ".join(all_ips) if all_ips else "No IP"
 
-                # Resolve flavor name using the same logic as 'cmx vm info'
-                try:
-                    vm_info = self.info(s.name, kind='vm')
-                    flavor_name = vm_info.get("Flavor", "Unknown")
-                    if isinstance(flavor_name, dict):
-                        flavor_name = flavor_name.get("name", "Unknown")
-                except Exception:
-                    # Fallback to the basic resolution if info() fails
-                    flavor_val = getattr(s, 'flavor', None)
-                    flavor_name = self._resolve_flavor_name(flavor_val, flavor_map=flavor_map)
-                    if flavor_name == "Unknown" or flavor_name.startswith("reservation:"):
-                        flavor_name = self._resolve_flavor_name(getattr(s, 'flavor_name', None), flavor_map=flavor_map)
+                # Resolve Flavor and TTL
+                flavor_val = getattr(s, 'flavor', None) or getattr(s, 'flavor_name', None)
+                flavor_name = "Unknown"
+                ttl = "N/A"
+
+                if flavor_val:
+                    # Handle Reservation IDs (e.g., "reservation:UUID" or just UUID)
+                    clean_id = flavor_val.split(':', 1)[1] if isinstance(flavor_val, str) and ':' in flavor_val else flavor_val
+
+                    if isinstance(clean_id, str) and clean_id in res_lookup:
+                        flavor_name = res_lookup[clean_id]["name"]
+                        # Calculate TTL from lease end_date
+                        end_date_str = res_lookup[clean_id]["end_date"]
+                        if end_date_str:
+                            try:
+                                end_date = datetime.datetime.fromisoformat(end_date_str)
+                                now = datetime.datetime.now(datetime.timezone.utc) if end_date.tzinfo else datetime.datetime.now()
+                                diff = end_date - now
+                                if diff.total_seconds() > 0:
+                                    days = diff.days
+                                    hours, rem = divmod(diff.seconds, 3600)
+                                    minutes, _ = divmod(rem, 60)
+                                    ttl = f"{days}d {hours}h {minutes}m" if days > 0 else f"{hours}h {minutes}m"
+                                else:
+                                    ttl = "Expired"
+                            except:
+                                pass
+                    elif isinstance(clean_id, str):
+                        flavor_name = flavor_map.get(clean_id, clean_id)
+                    elif hasattr(clean_id, 'name'):
+                        flavor_name = clean_id.name
 
                 results.append({
                     "name": s.name,
@@ -946,7 +992,8 @@ class Provider(CloudBaseManager):
                     "ip": ip,
                     "image": getattr(s, 'image_name', 'Unknown'),
                     "flavor": flavor_name,
-                    "networks": self._format_networks(addresses)
+                    "networks": self._format_networks(addresses),
+                    "TTL": ttl
                 })
 
             return results
@@ -954,6 +1001,8 @@ class Provider(CloudBaseManager):
             from cloudmesh.ai.vm.logger import logger
             logger.warning(f"CHI list failed: {e}")
             return []
+
+ 
 
     def _get_flavor_info(self, server) -> tuple[str, str, str]:
         """
