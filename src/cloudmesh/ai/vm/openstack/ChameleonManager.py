@@ -757,6 +757,37 @@ class Provider(CloudBaseManager):
 
         return ", ".join(net_strings) if net_strings else "No Networks"
 
+    def ttl_humanize(self, end_date):
+        ttl_str = "Unknown"
+        
+        try:
+            if isinstance(end_date, datetime):
+                # Handle timezone awareness automatically
+                now = datetime.now(end_date.tzinfo) if end_date.tzinfo else datetime.now()
+                ttl = end_date - now
+                
+                if ttl.total_seconds() < 0:
+                    ttl_str = "Expired"
+                else:
+                    # Strip out seconds and microseconds completely
+                    total_seconds = int(ttl.total_seconds())
+                    truncated_ttl = timedelta(seconds=(total_seconds // 60) * 60)
+                    
+                    if truncated_ttl.total_seconds() == 0:
+                        ttl_str = "Less than a minute"
+                    else:
+                        # precisedelta stops at minutes, showing hours and minutes cleanly
+                        ttl_str = humanize.precisedelta(truncated_ttl, minimum_unit="minutes")
+
+            # print(ttl_str)
+            # Note: Ensure tmp_name is passed as an argument or available as self.tmp_name if used here
+            # print("TMP: " + tmp_name)
+
+        except Exception as e:
+            print(f"Error calculating TTL: {e}")
+
+        return str(ttl_str)
+
     def list(self) -> List[Dict[str, Any]]:
         """Lists all Chameleon VMs with their reachable IP addresses and TTL."""
         self._setup_chi_context()
@@ -766,30 +797,19 @@ class Provider(CloudBaseManager):
             # 1. Pre-fetch all leases once to build a lookup map for flavors and end_dates
             # This avoids the "N+1" query problem and repeated authentication messages.
             res_lookup = {}
+            ttl_data = {}
             try:
                 leases = chi.lease.list_leases()
                 for l in leases:
 
+                    ttl_name = l.__dict__["name"].replace("res-", "")
 
                     try:
                         ttl_str = None
                         end_date = getattr(l, "end_date", None)
 
-                        if isinstance(end_date, datetime):
-                            if end_date.tzinfo is not None:
-                                now = datetime.now(end_date.tzinfo)
-                            else:
-                                now = datetime.now()
-                                
-                            ttl = end_date - now
-                            
-                            if ttl.total_seconds() < 0:
-                                ttl_str = "Expired"
-                            else:
-                                # precisedelta gives a clean string with days, hours, mins, and seconds
-                                ttl_str = humanize.precisedelta(ttl, minimum_unit="seconds")
-
-                        print(ttl_str)
+                        ttl_str = self.ttl_humanize(end_date)
+                        ttl_data[ttl_name] = ttl_str
                     except Exception as e:
                         print(f"Error calculating TTL: {e}")
 
@@ -807,12 +827,20 @@ class Provider(CloudBaseManager):
                                     except:
                                         props = {}
 
+                                tmp_name = props.get("name") if isinstance(props, dict) else "Unknown"
+                              
                                 res_lookup[r_id] = {
-                                    "name": props.get("name") if isinstance(props, dict) else "Unknown",
-                                    "end_date": end_date
+                                    "name": tmp_name,
+                                    "end_date": end_date,
+                                    "ttl": ttl_data.get(ttl_name, "N/A"),
+                                    "vm_name": ttl_name
                                 }
+                                # pprint(res_lookup[r_id])
+                # pprint(ttl_data)
+
             except Exception as e:
                 logger.debug(f"Could not pre-fetch leases: {e}")
+            
 
             # 2. Fetch standard flavors for non-reservation VMs
             flavor_map = {}
@@ -882,7 +910,7 @@ class Provider(CloudBaseManager):
                     "image": getattr(s, 'image_name', 'Unknown'),
                     "flavor": flavor_name,
                     "networks": self._format_networks(addresses),
-                    "TTL": ttl
+                    "ttl": ttl_data[s.name]
                 })
 
             return results
@@ -984,8 +1012,8 @@ class Provider(CloudBaseManager):
         self._setup_chi_context()
         try:
             server = chi.server.get_server(name)
-            from pprint import pprint
-            pprint(server.__dict__)
+            # from pprint import pprint
+            # pprint(server.__dict__)
 
 
             if not server:
