@@ -66,7 +66,7 @@ def test_vbox_cli_lifecycle(runner, config):
         assert result.exit_code == 0
 
         # 9. keys
-        result = runner.invoke(vm.vm_group, ["key"])
+        result = runner.invoke(vm.vm_group, ["key", "list"])
         assert result.exit_code == 0
 
     finally:

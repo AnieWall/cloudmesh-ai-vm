@@ -1,12 +1,29 @@
 import os
 import subprocess
-import datetime
+from typing import Optional
 import json
 from io import StringIO
 from contextlib import redirect_stdout
 import yaml
 from cloudmesh.ai.common.stopwatch import StopWatch
 from cloudmesh.ai.common.sys import systeminfo
+
+import platform # these need to be removes and sysinfo needs to be used
+import sys      # these need to be removes and sysinfo needs to be used
+from datetime import datetime
+
+# Git info
+
+def get_git_info():
+    try:
+        branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], text=True).strip()
+        commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+        git_info = f"Branch: {branch}\nCommit: {commit}"
+        git_data = {"branch": branch, "commit": commit}
+    except Exception:
+        git_info = "Git info unavailable"
+        git_data = {}
+    return git_info, git_data
 
 def get_results_username(config_path: Optional[str] = None) -> str:
     """
@@ -54,17 +71,11 @@ def save_benchmark(tag, config_path):
     benchmark_output = f.getvalue()
 
     # Git info
-    try:
-        branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], text=True).strip()
-        commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-        git_info = f"Branch: {branch}\nCommit: {commit}"
-        git_data = {"branch": branch, "commit": commit}
-    except Exception:
-        git_info = "Git info unavailable"
-        git_data = {}
+    git_info, git_data = get_git_info()
+    branch = git_data.get("branch", "unknown-branch")
 
     # Date and Time
-    now = datetime.datetime.now()
+    now = datetime.now()
     date_str = now.strftime("%Y-%m-%d %H:%M:%S")
     date_short = now.strftime("%Y-%m-%d")
     time_short = now.strftime("%H-%M")
@@ -113,3 +124,79 @@ def save_benchmark(tag, config_path):
         json.dump(results_data, jf, indent=4)
 
     print(f"Benchmark saved to {txt_file_path} and {json_file_path}")
+
+
+def create_benchmark_payload(benchmark_name: str, 
+                             user: str = "gregor") -> dict:
+
+
+    # Git info
+    git_info, git_data = get_git_info()
+
+
+    # Example usage:
+    # payload = create_benchmark_payload("lima-smoke", 
+    #                                     branch="main", 
+    #                                     commit="39ba1872...")
+    # print(json.dumps(payload, indent=2))
+
+    # 1. Gather experiment metadata
+
+    experiment_data = {
+        "benchmark": benchmark_name,
+        "date": datetime.now().isoformat(),
+        "user": user,
+        "branch": git_data.get("branch", "unknown-branch"),
+        "commit": git_data.get("commit", "unknown-commit"),
+    }
+
+    # 2. Gather system / runtime information (omitting hardware block)
+    system_data = {
+        "platform": {
+            "system": platform.system(),
+            "release": platform.release(),
+            "version": platform.version(),
+            "machine": platform.machine(),
+            "processor": platform.processor(),
+            "node": platform.node(),
+            "platform_version": platform.mac_ver()[0] if platform.system() == "Darwin" else platform.version(),
+            "sys_platform": sys.platform,
+            "python": sys.version,
+            "python_version": platform.python_version(),
+            "python_pip": getattr(sys, "pypy_version_info", None),  # Or fallback pip version check if needed
+        },
+    }
+
+    # 3. Extract active timers from Stopwatch
+    timers_list = []
+    # Stopwatch typically stores completed timers in a dictionary or accessible attribute
+    # For each timer recorded via Stopwatch:
+    for name in StopWatch.keys():
+        # Gather the individual pieces from the public API
+        status = StopWatch.get_status(name)
+        # Turn the internal boolean/None into a readable string (matches the output format of benchmark())
+        status_str = "ok" if status is True else ("failed" if status is False else "unknown")
+        # Elapsed time for the *last* start/stop pair
+        elapsed = StopWatch.get(name)               # may be float or "undefined"
+        # Total summed time (if the timer was started/stopped multiple times)
+        total = StopWatch.sum(name)                 # may be float or "undefined"
+        # Optional message attached with StopWatch.message()
+        msg = StopWatch.get_message(name)
+
+        timers_list.append({
+            "name": name,
+            "status": status_str,
+            "time": float(elapsed) if isinstance(elapsed, float) else None,
+            "sum": float(total) if isinstance(total, float) else None,
+            "msg": msg,
+        })
+
+    # 4. Construct final root dictionary
+    payload = {
+        "experiment": experiment_data,
+        "system": system_data,
+        "timers": timers_list,
+    }
+
+    return payload
+
