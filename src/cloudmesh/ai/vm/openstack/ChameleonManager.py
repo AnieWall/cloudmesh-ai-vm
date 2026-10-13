@@ -20,8 +20,10 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 from cloudmesh.ai.vm.CloudBaseManager import CloudBaseManager
 from cloudmesh.ai.vm.exceptions import ConfigError, VMResourceError, VMProviderError
-import datetime
 from datetime import timedelta
+from datetime import datetime
+import humanize
+
 import sys
 import time
 import traceback
@@ -767,6 +769,30 @@ class Provider(CloudBaseManager):
             try:
                 leases = chi.lease.list_leases()
                 for l in leases:
+
+
+                    try:
+                        ttl_str = None
+                        end_date = getattr(l, "end_date", None)
+
+                        if isinstance(end_date, datetime):
+                            if end_date.tzinfo is not None:
+                                now = datetime.now(end_date.tzinfo)
+                            else:
+                                now = datetime.now()
+                                
+                            ttl = end_date - now
+                            
+                            if ttl.total_seconds() < 0:
+                                ttl_str = "Expired"
+                            else:
+                                # precisedelta gives a clean string with days, hours, mins, and seconds
+                                ttl_str = humanize.precisedelta(ttl, minimum_unit="seconds")
+
+                        print(ttl_str)
+                    except Exception as e:
+                        print(f"Error calculating TTL: {e}")
+
                     end_date = getattr(l, "end_date", None) if not isinstance(l, dict) else l.get("end_date")
                     res_types = ["flavor_reservations", "node_reservations", "fip_reservations", "network_reservations", "device_reservations"]
                     for res_type in res_types:
