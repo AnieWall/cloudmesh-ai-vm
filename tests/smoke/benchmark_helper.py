@@ -7,6 +7,7 @@ from contextlib import redirect_stdout
 import yaml
 from cloudmesh.ai.common.stopwatch import StopWatch
 from cloudmesh.ai.common.sys import systeminfo
+from typing import Optional
 
 def get_results_username(config_path: Optional[str] = None) -> str:
     """
