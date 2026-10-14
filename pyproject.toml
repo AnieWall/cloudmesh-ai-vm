@@ -34,8 +34,8 @@ dependencies = [
     "python-swiftclient",
     "paramiko",
     "fabric",
-    "chameleon-blazarclient @ git+https://github.com/ChameleonCloud/python-blazarclient",
-    "python-zunclient @ git+https://github.com/chameleoncloud/python-zunclient",
+    "chameleon-blazarclient @ git+https://github.com/ChameleonCloud/python-blazarclient.git",
+    "python-zunclient @ git+https://github.com/chameleoncloud/python-zunclient.git",
     "ccauth @ git+https://github.com/ChameleonCloud/ccauth.git",
 ]
 
@@ -61,4 +61,3 @@ oracle = "cloudmesh.ai.vm.oracle.OracleManager:Provider"
 markers = [
     "compliance: mark test as a compliance test",
 ]
-
