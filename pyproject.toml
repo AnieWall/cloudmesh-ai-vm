@@ -34,13 +34,13 @@ dependencies = [
     "python-swiftclient",
     "paramiko",
     "fabric",
-    "git+https://github.com/ChameleonCloud/python-blazarclient",
-    "git+https://github.com/chameleoncloud/python-zunclient",
-    "git+https://github.com/ChameleonCloud/ccauth.git",
+    "chameleon-blazarclient @ git+https://github.com/ChameleonCloud/python-blazarclient",
+    "python-zunclient @ git+https://github.com/chameleoncloud/python-zunclient",
+    "ccauth @ git+https://github.com/ChameleonCloud/ccauth.git",
 ]
 
 [project.scripts]
-cmx = "cloudmesh.ai.command.vm:cmx"
+cmx = "cloudmesh.ai.command:cmx"
 
 [project.entry-points."cloudmesh.ai.cmc"]
 vm = "cloudmesh.ai.command.vm.vm_group"
