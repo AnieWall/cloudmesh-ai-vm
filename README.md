@@ -12,6 +12,7 @@
     - **Default Cloud**: Manage your active provider via `cmx vm provider set <cloud>`.
     - **Cloud Override**: Use the `--cloud` flag to temporarily use a different provider (e.g., `cmx vm start --cloud aws`).
 - **Remote Execution**: Execute commands directly on your VMs using `cmx vm run <command>`.
+- **SSH Key Management**: Scan for local SSH keys, verify their GitHub authentication status, and manage keys on GitHub (list and upload) directly from the CLI.
 - **Security Management**: Create, assign, and manage firewall rules for your VMs directly from the CLI (with smart-presets for web and database servers).
 - **SSH Integration**: Generate suggested SSH configuration entries for existing VMs to enable seamless access via `ssh <hostname>`.
 - **Interactive Shell**: Enter a dedicated VM management shell using `cmx vm -i`.
@@ -62,6 +63,10 @@ cmx vm start --cloud aws
 
 # List all VMs for current cloud
 cmx vm list
+
+# Manage SSH keys (Scan local, verify GitHub, or upload to GitHub)
+cmx vm key scan
+cmx vm key github upload ~/.ssh/id_rsa.pub
 
 # Enter interactive VM shell
 cmx vm -i

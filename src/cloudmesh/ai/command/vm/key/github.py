@@ -44,4 +44,38 @@ def list(as_json: bool):
     rows = [[k["name"], k["fingerprint"], k["type"]] for k in keys]
     render_table("GitHub SSH Keys", ["Name", "Fingerprint", "Type"], rows)
 
+@github.command()
+@click.option("--json", "as_json", is_flag=True, help="Output in JSON format")
+@handle_errors
+def verify(as_json: bool):
+    """Checks which local keys are registered with GitHub."""
+    km = KeyManager()
+    local_keys = km.scan_local_keys()
+
+    if not local_keys:
+        console.print("No local SSH keys found to verify.")
+        return
+
+    results = []
+    with console.status("[bold green]Verifying GitHub authentication..."):
+        for key in local_keys:
+            path = key["path"]
+            auth_info = km.verify_github_auth(path)
+
+            results.append({
+                "path": path,
+                "authenticated": auth_info["authenticated"],
+                "title": auth_info["title"],
+                "fingerprint": auth_info["fingerprint"],
+                "created_at": auth_info["created_at"],
+                "last_used": auth_info["last_used"]
+            })
+
+    if as_json:
+        console.print(json.dumps(results, indent=2))
+        return
+
+    rows = [[r["path"], "Yes" if r["authenticated"] else "No", r["title"] or "N/A", r["fingerprint"] or "N/A", r["created_at"], r["last_used"]] for r in results]
+    render_table("GitHub Authentication Status", ["Path", "Authenticated", "GitHub Name", "Fingerprint", "Created At", "Last Used"], rows)
+
 cmd = github

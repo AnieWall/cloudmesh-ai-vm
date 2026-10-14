@@ -1,6 +1,18 @@
 # Changelog
 
+## [1.7.0] - 2026-10-14
+
+### Added
+- **SSH Key Management**: Implemented `cmx vm key` command group to manage SSH keys.
+    - `cmx vm key list`: List SSH keys for the current or all enabled providers.
+    - `cmx vm key scan`: Scan host machine for local SSH keys.
+    - `cmx vm key verify`: Verify which local keys authenticate with GitHub.
+    - `cmx vm key github list`: List keys configured on GitHub.
+    - `cmx vm key github upload`: Upload a local public key to GitHub.
+- **Documentation**: Added detailed SSH key management reference to `docs/cli.md` and `README.md`.
+
 ## [1.6.0] - 2026-10-05
+
 
 ### Added
 - **Secret Masking**: Implemented a pattern-based redaction utility in `providers_utils.py` to mask sensitive data (tokens, passwords, API keys) in CLI error messages.

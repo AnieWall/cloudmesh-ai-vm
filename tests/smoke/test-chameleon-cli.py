@@ -42,6 +42,7 @@ def test_chameleon_cli_lifecycle(runner):
                 break
 
     # 4. list
+
     result = runner.invoke(vm.vm_group, ["list"])
     assert result.exit_code == 0
     assert vm_name in result.output

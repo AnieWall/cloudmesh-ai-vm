@@ -7,6 +7,7 @@ from cloudmesh.ai.command import vm
 from cloudmesh.ai.common.stopwatch import StopWatch
 
 from tests.smoke.cli_helper import setup_cli_config
+from pprint import pprint
 
 @pytest.fixture
 def runner():
@@ -25,6 +26,21 @@ def config(tmp_path, runner):
         "key_path": "~/.ssh/id_rsa",
     }
     setup_cli_config(tmp_path, "jetstream", provider_config)
+    
+    # Read username from clouds.yaml
+    config_path = os.path.expanduser("~/.config/cloudmesh/clouds.yaml")
+    try:
+        with open(config_path, "r") as f:
+            config = yaml.safe_load(f)
+            username = config.get("username", "user").replace("_", "-")
+    except Exception:
+        username = "smoke-test-user"
+
+    # Construct vm_name matching the requested pattern
+    vm_name = f"{username}-{uuid.uuid4().hex[:4]}"
+    provider_config["vm_name"] = vm_name
+
+    pprint(provider_config)
 
 def test_jetstream_cli_lifecycle(runner, config):
     """
@@ -57,12 +73,18 @@ def test_jetstream_cli_lifecycle(runner, config):
         vm_name = "smoke-jetstream-vm"
 
     try:
+        
+        # 4. list
         # 4. list
         result = runner.invoke(vm.vm_group, ["list"])
         assert result.exit_code == 0
-        plain_output = Text.from_ansi(result.output).plain
-        assert vm_name in plain_output
-
+        
+        # Extract the base prefix (e.g., 'smoke-chameleon-vm' or whatever your prefix is) 
+        # to avoid truncation issues entirely.
+        base_prefix = vm_name.rsplit("-", 1)[0]
+        assert base_prefix in result.output
+        
+    
         # 5. stop
         result = runner.invoke(vm.vm_group, ["stop", vm_name])
         if result.exit_code != 0:

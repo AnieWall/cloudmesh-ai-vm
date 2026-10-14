@@ -145,9 +145,22 @@ Lists available hardware profiles for the current cloud.
 
 #### `key`
 
-Lists available SSH keys in the current cloud.
+Manage SSH keys for the current cloud and GitHub.
 
-- **Example**: `cmx vm key`
+- **Subcommands**:
+  - `list`: List all SSH keys for the current provider.
+    - `--all`: List keys from all enabled providers.
+    - **Example**: `cmx vm key list --all`
+  - `scan`: Scan for local SSH keys on the host machine.
+    - `--json`: Output in JSON format.
+    - **Example**: `cmx vm key scan`
+  - `verify`: Check which local keys authenticate with GitHub.
+    - **Example**: `cmx vm key verify`
+  - `github`: Manage keys specifically on GitHub.
+    - `list`: List keys currently configured in GitHub.
+    - `upload <path_to_key>`: Upload a local key to GitHub.
+    - **Example**: `cmx vm key github upload ~/.ssh/id_rsa.pub`
+
 
 #### `security-group`
 
