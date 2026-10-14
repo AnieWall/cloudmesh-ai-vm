@@ -1,6 +1,6 @@
 import click
-from .._shared.context import console, state
-from .._shared.exceptions import handle_errors
+from cloudmesh.ai.command._shared.context import console, state
+from cloudmesh.ai.command._shared.exceptions import handle_errors
 
 @click.command(name="set")
 @click.pass_context

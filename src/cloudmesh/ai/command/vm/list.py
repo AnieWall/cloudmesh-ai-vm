@@ -1,8 +1,8 @@
 import click
 from typing import Optional
-from ._shared.context import console, get_active_provider, vm_options
-from ._shared.exceptions import handle_errors
-from ._shared.ui import render_table
+from cloudmesh.ai.command._shared.context import console, get_active_provider, vm_options
+from cloudmesh.ai.command._shared.exceptions import handle_errors
+from cloudmesh.ai.command._shared.ui import render_table
 import json        
 import yaml    
 
@@ -13,7 +13,7 @@ def list_group(ctx: click.Context, all: bool):
 
     """List VM resources."""
     if ctx.obj is None:
-        from ._shared.context import VMContext
+        from cloudmesh.ai.command._shared.context import VMContext
         ctx.obj = VMContext()
     ctx.obj.list_all = all
     if ctx.invoked_subcommand is None:
@@ -47,7 +47,7 @@ def list_vms(ctx: click.Context, **kwargs):
     all_flag = getattr(ctx.obj, "list_all", False)
     if all_flag:
         from cloudmesh.ai.vm.providers import PROVIDER_MAP, get_provider
-        from ._shared.context import state
+        from cloudmesh.ai.command._shared.context import state
 
         config = state.config
         configured_clouds = config.clouds if config else {}

@@ -74,7 +74,7 @@ Manage the cloud providers available to the tool.
 - **`info`**: Display detailed information about the active provider.
   - For the **WSL2 provider**, the tool automatically detects the best available binary (`wsl.exe` or `wsl`) for compatibility across Windows CMD, PowerShell, Git Bash, and WSL-native environments.
 
-### Key Management (`cmx vm key`)
+### Key Management (`cmx key`)
 Manage SSH keys for VM access.
 
 - **`upload KEY_PATH`**: Upload a public SSH key to the cloud provider.

@@ -1,7 +1,7 @@
 import click
 import ast
-from .._shared.context import console, state
-from .._shared.exceptions import handle_errors
+from cloudmesh.ai.command._shared.context import console, state
+from cloudmesh.ai.command._shared.exceptions import handle_errors
 
 def parse_value(value: str):
     """Attempt to parse value as boolean, integer, or float; fallback to string."""

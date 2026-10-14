@@ -26,14 +26,14 @@ security_group: default
 List SSH keys available in the active provider:
 
 ```bash
-cmx vm key list
+cmx key list
 ```
 
 ### Upload a Public Key
 Upload an existing public SSH key:
 
 ```bash
-cmx vm key upload ~/.ssh/id_rsa.pub
+cmx key upload ~/.ssh/id_rsa.pub
 ```
 
 If no path is supplied, the command defaults to using `~/.ssh/id_rsa.pub`.
@@ -41,7 +41,7 @@ If no path is supplied, the command defaults to using `~/.ssh/id_rsa.pub`.
 A custom cloud key name can also be specified:
 
 ```bash
-cmx vm key upload ~/.ssh/id_rsa.pub --name my-cloud-key
+cmx key upload ~/.ssh/id_rsa.pub --name my-cloud-key
 ```
 
 > **Note:** If `--name` is omitted, the OpenStack provider derives the key name from the public-key filename.
@@ -50,7 +50,7 @@ cmx vm key upload ~/.ssh/id_rsa.pub --name my-cloud-key
 Delete a key from the active provider:
 
 ```bash
-cmx vm key delete my-cloud-key
+cmx key delete my-cloud-key
 ```
 
 > **Important:** Deleting the cloud copy of a public key does **not** delete your local private key.
@@ -175,7 +175,7 @@ A typical secure setup follows these steps:
 
 ```bash
 # Upload public key
-cmx vm key upload ~/.ssh/id_rsa.pub --name research-key
+cmx key upload ~/.ssh/id_rsa.pub --name research-key
 
 # Create security group
 cmx vm security-group create research-ssh \

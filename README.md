@@ -65,8 +65,8 @@ cmx vm start --cloud aws
 cmx vm list
 
 # Manage SSH keys (Scan local, verify GitHub, or upload to GitHub)
-cmx vm key scan
-cmx vm key github upload ~/.ssh/id_rsa.pub
+cmx key scan
+cmx key github upload ~/.ssh/id_rsa.pub
 
 # Enter interactive VM shell
 cmx vm -i

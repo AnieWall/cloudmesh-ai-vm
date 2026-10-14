@@ -1,7 +1,7 @@
 import click
 from typing import Optional
-from ._shared.context import console, get_active_provider, vm_options, state
-from ._shared.exceptions import handle_errors, VMCommandError
+from cloudmesh.ai.command._shared.context import console, get_active_provider, vm_options, state
+from cloudmesh.ai.command._shared.exceptions import handle_errors, VMCommandError
 import json
 import yaml
 
@@ -34,7 +34,7 @@ def info(ctx: click.Context,
     
     # 1. Fetch VM information
     if name is None:
-        from ._shared.context import resolve_vm_name
+        from cloudmesh.ai.command._shared.context import resolve_vm_name
         name = resolve_vm_name(ctx, name)
 
     vm_info = provider.info(name, kind=kind)

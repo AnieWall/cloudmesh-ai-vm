@@ -1,7 +1,7 @@
 import click
 from typing import Optional
-from ._shared.context import console, get_active_provider, vm_options, state, resolve_vm_name
-from ._shared.exceptions import handle_errors, VMCommandError
+from cloudmesh.ai.command._shared.context import console, get_active_provider, vm_options, state, resolve_vm_name
+from cloudmesh.ai.command._shared.exceptions import handle_errors, VMCommandError
 
 @click.command()
 @click.pass_context

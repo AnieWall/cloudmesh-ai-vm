@@ -1,7 +1,7 @@
 import click
-from .._shared.context import console, get_active_provider
-from .._shared.exceptions import handle_errors
-from .._shared.ui import render_table
+from cloudmesh.ai.command._shared.context import console, get_active_provider
+from cloudmesh.ai.command._shared.exceptions import handle_errors
+from cloudmesh.ai.command._shared.ui import render_table
 
 @click.command()
 @click.option("--all", is_flag=True, help="List keys from all enabled providers")
@@ -11,7 +11,7 @@ def list_keys(ctx: click.Context, all: bool):
     """List all SSH keys for the current provider."""
     if all:
         from cloudmesh.ai.vm.providers import PROVIDER_MAP, get_provider
-        from .._shared.context import state
+        from cloudmesh.ai.command._shared.context import state
         
         config = state.config
         configured_clouds = config.db.get("clouds", {}) if config else {}

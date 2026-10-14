@@ -1,6 +1,6 @@
 import click
 import webbrowser
-from ._shared.context import VMContext, vm_options
+from cloudmesh.ai.command._shared.context import VMContext, vm_options
 
 URL_MAP = {
     "CHI@TACC": "https://chi.tacc.chameleoncloud.org",
@@ -19,7 +19,7 @@ URL_MAP = {
 def cmd(ctx: click.Context, site: str = None, cloud: str = None, debug: bool = False, verbose: bool = False, **kwargs)-> None:    
     
     """Open the Horizon dashboard for the active cloud provider."""
-    from ._shared.context import state
+    from cloudmesh.ai.command._shared.context import state
     
     # 1. Determine which site to use
     target_site = site

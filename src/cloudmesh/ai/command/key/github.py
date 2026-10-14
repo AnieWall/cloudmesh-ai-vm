@@ -1,8 +1,8 @@
 import click
 import json
-from .._shared.context import console
-from .._shared.exceptions import handle_errors
-from .._shared.ui import render_table
+from cloudmesh.ai.command._shared.context import console
+from cloudmesh.ai.command._shared.exceptions import handle_errors
+from cloudmesh.ai.command._shared.ui import render_table
 from cloudmesh.ai.vm.key_manager import KeyManager
 
 @click.group()

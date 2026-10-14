@@ -1,7 +1,7 @@
 import click
-from ._shared.context import console, get_active_provider, vm_options
-from ._shared.exceptions import handle_errors
-from ._shared.ui import render_table
+from cloudmesh.ai.command._shared.context import console, get_active_provider, vm_options
+from cloudmesh.ai.command._shared.exceptions import handle_errors
+from cloudmesh.ai.command._shared.ui import render_table
 
 @click.command()
 @click.pass_context

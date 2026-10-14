@@ -2,8 +2,8 @@ import click
 import re
 from datetime import datetime, timedelta
 from typing import Optional
-from .._shared.context import console, get_active_provider, state
-from .._shared.exceptions import handle_errors, VMCommandError
+from cloudmesh.ai.command._shared.context import console, get_active_provider, state
+from cloudmesh.ai.command._shared.exceptions import handle_errors, VMCommandError
 
 def parse_relative_offset(offset_str: str) -> timedelta:
     """

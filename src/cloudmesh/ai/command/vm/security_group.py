@@ -1,9 +1,9 @@
 import click
 import requests
 from typing import Optional
-from ._shared.context import console, get_active_provider, vm_options
-from ._shared.exceptions import handle_errors, VMCommandError
-from ._shared.ui import render_table
+from cloudmesh.ai.command._shared.context import console, get_active_provider, vm_options
+from cloudmesh.ai.command._shared.exceptions import handle_errors, VMCommandError
+from cloudmesh.ai.command._shared.ui import render_table
 
 PRESETS = {
     "web-server": [

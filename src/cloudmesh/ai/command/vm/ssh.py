@@ -2,8 +2,8 @@ import click
 import subprocess
 import os
 from typing import Optional
-from ._shared.context import console, get_active_provider, vm_options, resolve_vm_name
-from ._shared.exceptions import handle_errors, VMCommandError
+from cloudmesh.ai.command._shared.context import console, get_active_provider, vm_options, resolve_vm_name
+from cloudmesh.ai.command._shared.exceptions import handle_errors, VMCommandError
 
 @click.command()
 @click.argument("name", required=False)
@@ -45,7 +45,7 @@ def ssh(ctx: click.Context, name: Optional[str] = None, **kwargs)-> None:
         raise VMCommandError(f"Could not resolve IP address for VM {vm_name}.")
 
     # Get SSH key path from config
-    from ._shared.context import state
+    from cloudmesh.ai.command._shared.context import state
     cloud_config = state.config.get_cloud_config(provider.cloud_name) or {}
     key_path = cloud_config.get("key_path", "~/.ssh/id_rsa")
     user = cloud_config.get("user", "ubuntu")
