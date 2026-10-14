@@ -41,8 +41,31 @@ def list(as_json: bool):
         console.print(json.dumps(keys, indent=2))
         return
 
-    rows = [[k["name"], k["fingerprint"], k["type"]] for k in keys]
-    render_table("GitHub SSH Keys", ["Name", "Fingerprint", "Type"], rows)
+    rows = []
+    for k in keys:
+        key_str = k.get("key", "")
+        key_type = "Unknown"
+        if key_str.startswith("ssh-rsa"):
+            key_type = "rsa"
+        elif key_str.startswith("ssh-ed25519"):
+            key_type = "ed25519"
+        elif key_str.startswith("ssh-dss"):
+            key_type = "dsa"
+        elif key_str.startswith("ecdsa-sha2-nistp"):
+            key_type = "ecdsa"
+
+        rows.append([
+            k.get("title", "N/A"),
+            key_type,
+            k.get("sha256", "N/A"),
+            k.get("md5", "N/A"),
+            k.get("created_at", "N/A"),
+            k.get("last_used", "N/A"),
+            "Yes" if k.get("verified") else "No",
+            k.get("local_path", "N/A")
+        ])
+
+    render_table("GitHub SSH Keys", ["Name", "Type", "SHA256 Fingerprint", "MD5 Fingerprint", "Created At", "Last Used", "Verified", "Local Path"], rows)
 
 @github.command()
 @click.option("--json", "as_json", is_flag=True, help="Output in JSON format")
