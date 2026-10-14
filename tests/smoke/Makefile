@@ -19,7 +19,9 @@ lima: ## Run Lima smoke tests
 
 # Run Chameleon smoke tests
 chameleon: ## Run Chameleon smoke tests
-	OS_CLOUD=chameleon python3 -m pytest -s -vv test-chameleon-cli.py test-chameleon-smoke.py "test_lifecycle_unified.py::test_provider_lifecycle[chameleon]"
+	# OS_CLOUD=chameleon python3 -m pytest -s -vv test-chameleon-cli.py test-chameleon-smoke.py "test_lifecycle_unified.py::test_provider_lifecycle[chameleon]"
+	OS_CLOUD=chameleon python3 -m pytest -s -vv test-chameleon-cli.py "test_lifecycle_unified.py::test_provider_lifecycle[chameleon]"
+
 
 # Run Jetstream smoke tests
 jetstream: ## Run Jetstream smoke tests
