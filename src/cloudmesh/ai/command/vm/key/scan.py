@@ -29,11 +29,20 @@ def scan(as_json: bool):
         path = k["path"]
         if path.startswith(home):
             path = path.replace(home, "~", 1)
-        rows.append([path, k["type"], f"{k['sha256']} ({k['md5']})", "Yes" if k["has_passphrase"] else "No"])
+        rows.append([path, k["type"], k["sha256"], k["md5"], k["comment"], "Yes" if k["has_passphrase"] else "No"])
 
-    render_table("Local SSH Keys", ["Path", "Type", "Fingerprint (SHA256 / MD5)", "Passphrase"], rows)
+    render_table("Local SSH Keys", ["Path", "Type", "Fingerprint (SHA256)", "Fingerprint (MD5)", "Comment", "Passphrase"], rows)
 
-    console.print("\n[bold yellow]WARNING:[/bold yellow] The keys listed above are local SSH keys. They [bold red]must not[/bold red] be used for cloud providers such as [bold]AWS, Azure, Google, Chameleon, or Jetstream[/bold].")
-    console.print("For cloud providers, it is strongly recommended to [bold]create a dedicated key with a passphrase[/bold] and manage it using [bold]ssh-agent[/bold] for better security.")
+    # Identify keys without passphrases
+    unprotected_keys = [k["path"].replace(home, "~", 1) if k["path"].startswith(home) else k["path"]
+                        for k in keys if not k["has_passphrase"]]
+
+    if unprotected_keys:
+        console.print("\n[bold red]The following keys are unprotected (no passphrase):[/bold red]")
+        for key_path in unprotected_keys:
+            console.print(f" - [red]{key_path}[/red]")
+
+        console.print("\n[bold yellow]WARNING:[/bold yellow] The keys listed above are local SSH keys. They [bold red]must not[/bold red] be used for cloud providers such as [bold]AWS, Azure, Google, Chameleon, or Jetstream[/bold].")
+        console.print("For cloud providers, it is strongly recommended to [bold]create a dedicated key with a passphrase[/bold] and manage it using [bold]ssh-agent[/bold] for better security.")
 
 cmd = scan

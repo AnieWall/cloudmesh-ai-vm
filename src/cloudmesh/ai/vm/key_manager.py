@@ -76,15 +76,45 @@ class KeyManager:
                 key_type = self._get_key_type(file)
                 has_passphrase = self._has_passphrase(file)
                 fps = self.get_fingerprints(str(file))
+                comment = self._get_key_comment(file)
                 keys.append({
                     "path": str(file),
                     "type": key_type,
                     "sha256": fps["sha256"],
                     "md5": fps["md5"],
+                    "comment": comment,
                     "has_passphrase": has_passphrase
                 })
 
         return keys
+
+    def _get_key_comment(self, key_path: Path) -> str:
+        """
+        Extracts the comment from the public key associated with the private key.
+        """
+        try:
+            pub_file = key_path.with_suffix(key_path.suffix + ".pub")
+            if pub_file.exists():
+                pub_line = pub_file.read_text().strip().splitlines()[0]
+                parts = pub_line.split()
+                if len(parts) >= 3:
+                    return " ".join(parts[2:])
+
+            pub_out = subprocess.run(
+                ["ssh-keygen", "-y", "-f", str(key_path)],
+                capture_output=True,
+                text=True,
+                stdin=subprocess.DEVNULL
+            )
+            if pub_out.returncode == 0:
+                pub_line = pub_out.stdout.strip().splitlines()[0]
+                parts = pub_line.split()
+                if len(parts) >= 3:
+                    return " ".join(parts[2:])
+        except Exception as e:
+            logger.debug(f"Error getting comment for {key_path}: {e}")
+
+        return "N/A"
 
     def _get_key_type(self, key_path: Path) -> str:
         """
