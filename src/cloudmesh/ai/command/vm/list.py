@@ -40,9 +40,10 @@ def _render_vms(cloud_name, vms):
 
 @list_group.command(name="vms")
 @click.pass_context
+@click.option("--json", is_flag=True, help="Output in JSON format")
 @vm_options
 @handle_errors
-def list_vms(ctx: click.Context, **kwargs):
+def list_vms(ctx: click.Context, json: bool = False, **kwargs):
     """List VMs."""
     all_flag = getattr(ctx.obj, "list_all", False)
     if all_flag:
@@ -53,6 +54,7 @@ def list_vms(ctx: click.Context, **kwargs):
         configured_clouds = config.clouds if config else {}
 
         any_vms = False
+        all_vms_data = {}
         for cloud_name in sorted(PROVIDER_MAP.keys()):
             cloud_cfg = configured_clouds.get(cloud_name)
             is_enabled = False
@@ -68,10 +70,17 @@ def list_vms(ctx: click.Context, **kwargs):
             try:
                 provider = get_provider(cloud_name)
                 vms = provider.list()
-                if _render_vms(cloud_name, vms):
-                    any_vms = True
+                if vms:
+                    if json:
+                        all_vms_data[cloud_name] = vms
+                    if _render_vms(cloud_name, vms):
+                        any_vms = True
             except Exception as e:
                 console.print(f"Could not list VMs for provider {cloud_name}: {e}")
+
+        if json:
+            console.print(json.dumps(all_vms_data, indent=4))
+            return
 
         if not any_vms:
             console.print("No VMs found on any enabled providers.")
@@ -79,7 +88,12 @@ def list_vms(ctx: click.Context, **kwargs):
 
     provider = get_active_provider(ctx)
     cloud_name = provider.cloud_name
-    if not _render_vms(cloud_name, provider.list()):
+    vms = provider.list()
+    if json:
+        console.print(json.dumps({cloud_name: vms}, indent=4))
+        return
+
+    if not _render_vms(cloud_name, vms):
         console.print(f"No VMs found on {cloud_name}.")
 
 
