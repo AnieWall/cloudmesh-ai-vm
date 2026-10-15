@@ -20,6 +20,12 @@ def handle_errors(f):
             console.print(f"[bold red]Error:[/bold red] {e.message}")
             raise click.Abort()
         except Exception as e:
-            console.print(f"[bold red]Unexpected Error:[/bold red] {str(e)}")
+            # Check if it's a configuration or provider error
+            e_type = type(e).__name__
+            if "ConfigError" in e_type or "VMProviderError" in e_type:
+                console.print(f"[bold red]Configuration Error:[/bold red] {str(e)}")
+                console.print("[yellow]Please check your clouds.yaml configuration and environment variables (e.g., OS_CLOUD).[/yellow]")
+            else:
+                console.print(f"[bold red]Unexpected Error:[/bold red] {str(e)}")
             raise click.Abort()
     return wrapper
