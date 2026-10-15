@@ -42,7 +42,7 @@ def resolve_cidr(cidr: str) -> str:
         return "10.0.0.0/8"  # Simplified internal range
     return cidr
 
-@click.group(invoke_without_command=True)
+@click.group(invoke_without_command=True, name="security-group")
 @click.pass_context
 @vm_options
 def security_group(ctx: click.Context, **kwargs):

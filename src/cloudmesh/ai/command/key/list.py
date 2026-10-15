@@ -53,7 +53,6 @@ def list_keys(ctx: click.Context, all: bool, as_json: bool):
     keys = provider.get_keys()
     if keys:
         if as_json:
-            import json
             console.print(json.dumps(keys, indent=2))
         else:
             render_table("SSH Keys", ["Name", "Fingerprint"], [[k.get("name"), k.get("fingerprint", "N/A")] for k in keys])

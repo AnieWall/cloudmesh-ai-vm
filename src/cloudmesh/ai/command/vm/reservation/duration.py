@@ -29,20 +29,21 @@ def parse_relative_offset(offset_str: str) -> timedelta:
     raise click.BadParameter(f"Unsupported time unit '{unit}'. Use 'm' for minutes, 'h' for hours, or 'd' for days.")
 
 @click.command()
+@click.pass_context
 @click.argument("name")
 @click.option("--node-type", required=True, help="Type of node to reserve (e.g., 'compute_haswell')")
 @click.option("--count", type=int, default=1, help="Number of nodes to reserve")
 @click.option("--start", help="Relative start time offset (e.g., '+10m', '+1h', '+1d'). Defaults to now.")
 @click.option("--days", type=int, default=1, help="Duration of the reservation in days")
 @handle_errors
-def duration(name: str, node_type: str, count: int, start: Optional[str], days: int) -> None:
+def duration(ctx: click.Context, name: str, node_type: str, count: int, start: Optional[str], days: int) -> None:
     """
     Creates a reservation with a specified duration and relative start time.
 
     Example:
         cmx vm reservation duration "my-lease" --node-type "compute_haswell" --count 1 --start +10m
     """
-    provider = get_active_provider()
+    provider = get_active_provider(ctx)
 
     # Verify provider supports reservations
     if not hasattr(provider, 'create_reservation'):
