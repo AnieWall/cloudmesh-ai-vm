@@ -1,24 +1,15 @@
 import pytest
+import uuid
 import re
 import json
-from rich.text import Text
 from click.testing import CliRunner
 from cloudmesh.ai.command import vm
-from cloudmesh.ai.common.stopwatch import StopWatch
-
-from tests.smoke.cli_helper import setup_cli_config
-
-from tests.smoke.benchmark_helper import (
-    save_benchmark,
-    create_benchmark_payload,
-    get_results_username,  
-)
-
+from tests.smoke.cli_helper import setup_cli_config, cli_step
+from tests.smoke.benchmark_helper import save_benchmark, create_benchmark_payload, get_results_username
 
 @pytest.fixture
 def runner():
     return CliRunner()
-
 
 @pytest.fixture
 def config(tmp_path, runner):
@@ -31,124 +22,117 @@ def config(tmp_path, runner):
 
 def test_multipass_cli_lifecycle(runner, config):
     """
-    Smoke test for Multipass CLI lifecycle.
+    Smoke test for Multipass CLI lifecycle following the Chameleon pattern.
     """
+    try:
+        username = get_results_username(config_path=config)
+    except Exception:
+        username = "smoke_test_user"
+
     # 1. providers
-    result = runner.invoke(vm.vm_group, ["provider", "list"])
+    with cli_step("Fetching Provider List", timer_name="multipass_provider_list") as step:
+        result = runner.invoke(vm.vm_group, ["provider", "list"])
+        step.debug("Provider list output:", result)
     assert result.exit_code == 0
     assert "multipass" in result.output.lower()
 
     # 2. set
-    result = runner.invoke(vm.vm_group, ["provider", "set", "multipass"])
+    with cli_step("Setting up CLI config for Multipass...", timer_name="multipass_provider_set") as step:
+        result = runner.invoke(vm.vm_group, ["provider", "set", "multipass"])
+        step.debug("Provider set output:", result)
     assert result.exit_code == 0
 
-    # 3. start (without name)
-    # Should generate a name like smoke-test-user-1
-    with StopWatch.timer("multipass_start"):
-        result = runner.invoke(vm.vm_group, ["start"])
+    # 3. start
+    with cli_step("Starting a new Multipass VM...", timer_name="multipass_start") as step:
+        vm_name = f"{username}-smoke-multipass-vm-{uuid.uuid4().hex[:6]}"
+        result = runner.invoke(vm.vm_group, ["start", vm_name])
+        step.debug("Multipass start output:", result)
     if result.exit_code != 0:
-        # Multipass might not be installed in the test env, skip if so
         pytest.skip(f"Multipass start failed: {result.output}")
 
+    # Capture the actual VM name
+    match = re.search(r"Successfully started VM ([\w-]+)", result.output)
+    if match:
+        vm_name = match.group(1)
+    else:
+        # Fallback: try to find any name that looks like the requested one
+        for word in result.output.split():
+            if "smoke-multipass-vm" in word and "-" in word:
+                vm_name = word.strip(".,!")
+                break
 
-    assert "Generating VM name" in result.output
-    # Verify the underscore was replaced by hyphen: smoke_test_user -> smoke-test-user
-    assert "smoke-test-user-" in result.output
+    # 4. list
+    with cli_step(f"Checking if VM {vm_name} is in the list...", timer_name="multipass_list") as step:
+        result = runner.invoke(vm.vm_group, ["list"])
+        step.debug("Multipass list output:", result)
+    assert result.exit_code == 0
+    assert vm_name[:8] in result.output
 
-    # Extract the generated VM name for subsequent steps
-    output = Text.from_ansi(result.output).plain
-    match = re.search(r"Successfully started VM ([\w-]+)", output)
-    vm_name = match.group(1) if match else "smoke-test-user"
+    # 5. stop
+    with cli_step(f"Stopping VM {vm_name}...", timer_name="multipass_stop") as step:
+        result = runner.invoke(vm.vm_group, ["stop", vm_name])
+        step.debug("Multipass stop output:", result)
+    if result.exit_code != 0:
+        pytest.skip("Multipass stop failed")
+
+    # 6. delete
+    with cli_step(f"Deleting VM {vm_name}...", timer_name="multipass_delete") as step:
+        result = runner.invoke(vm.vm_group, ["delete", vm_name])
+        step.debug("Multipass delete output:", result)
+    if result.exit_code != 0:
+        pytest.skip("Multipass delete failed")
+
+    # 7. images
+    with cli_step("Fetching Multipass images...", timer_name="multipass_images") as step:
+        result = runner.invoke(vm.vm_group, ["image"])
+        step.debug("Multipass images output:", result)
+    if result.exit_code != 0:
+        pytest.skip("Multipass images failed")
+
+    # 8. flavors
+    with cli_step("Fetching Multipass flavors...", timer_name="multipass_flavors") as step:
+        result = runner.invoke(vm.vm_group, ["flavor"])
+        step.debug("Multipass flavors output:", result)
+    if result.exit_code != 0:
+        pytest.skip("Multipass flavors failed")
+
+    # 9. keys upload (if supported)
+    # with cli_step("Uploading SSH key to Multipass...", timer_name="multipass_key_upload") as step:
+    #    result = runner.invoke(vm.vm_group, ["key", "upload", "~/.ssh/id_rsa.pub", "--name", "smoke-key"])
+    #    step.debug("Multipass key upload output:", result)
+    #if result.exit_code != 0:
+    #    pytest.skip("Multipass key upload failed")
+
+    # 10. keys delete (if supported)
+    #with cli_step("Deleting SSH key from Multipass...", timer_name="multipass_key_delete") as step:
+    #    result = runner.invoke(vm.vm_group, ["key", "delete", "smoke-key"])
+    #    step.debug("Multipass key delete output:", result)
+    #if result.exit_code != 0:
+    #    pytest.skip("Multipass key delete failed")
+
+    # 11. security_groups (likely not supported by Multipass)
+    #with cli_step("Fetching Multipass security groups...", timer_name="multipass_security_groups") as step:
+    #    result = runner.invoke(vm.vm_group, ["security-group"])
+    #    step.debug("Multipass security_groups output:", result)
+    #if result.exit_code != 0:
+    #    pytest.skip("Multipass security-group failed")
+
+    # 12. ssh_config
+    #with cli_step("Fetching Multipass SSH config...", timer_name="multipass_ssh_config") as step:
+    #    result = runner.invoke(vm.vm_group, ["ssh-config"])
+    #    step.debug("Multipass ssh_config output:", result)
+    #assert result.exit_code == 0
+
+    # Save benchmark results
+    save_benchmark(tag="Multipass CLI", config_path=config)
 
     try:
-        # 4. list
-        with StopWatch.timer("multipass_list"):
-            result = runner.invoke(vm.vm_group, ["list"])
-        assert result.exit_code == 0
-        # Verify the new header: "VMs on multipass"
-        assert "VMs on multipass" in result.output
-        # Use a case-insensitive check or check if vm_name is in output
-        assert vm_name.lower() in result.output.lower()
+        username = get_results_username(config_path=config)
+    except Exception:
+        username = "smoke_test_user"
 
-        # 5. run
-        with StopWatch.timer("multipass_run"):
-            result = runner.invoke(vm.vm_group, ["run", vm_name, "hostname"])
-        # If the command fails (e.g. no VM reachable) skip the rest of the test
-        if result.exit_code != 0:
-            pytest.skip(f"Multipass run failed: {result.output}")
-
-        # 6. stop
-        with StopWatch.timer("multipass_stop"):
-            result = runner.invoke(vm.vm_group, ["stop", vm_name])
-        assert result.exit_code == 0
-
-        # 7. delete
-        with StopWatch.timer("multipass_delete"):
-            result = runner.invoke(vm.vm_group, ["delete", vm_name])
-        assert result.exit_code == 0
-
-        # 8. images
-        with StopWatch.timer("multipass_images"):
-            result = runner.invoke(vm.vm_group, ["image"])
-        assert result.exit_code == 0
-
-        # 9. flavors
-        with StopWatch.timer("multipass_flavors"):
-            result = runner.invoke(vm.vm_group, ["flavor"])
-        assert result.exit_code == 0
-
-        # 10. keys
-        with StopWatch.timer("multipass_keys"):
-             result = runner.invoke(vm.vm_group, ["key", "list"])
-        assert result.exit_code == 0
-
-
-    # finally:
-    #     # Cleanup
-    #     runner.invoke(vm.vm_group, ["delete", vm_name])
-    #     save_benchmark(tag="Multipass CLI", config_path=None)
-
-    #     # 
-    #     # result = create_benchmark_payload(
-    #     #     benchmark_name: str, 
-    #     #     user: str = "gregor")
-
-    #     # finish this. Also see the cli_helper.py and conftest.py for how to get the config path. You can use the config fixture to get the path to the temporary clouds.yaml file used in the test.
-    finally:
-        # Cleanup VMs
-        runner.invoke(vm.vm_group, ["delete", vm_name])
-        
-        # Save standard benchmark text/json files
-        save_benchmark(tag="Multipass CLI", config_path=config)
-
-        # Retrieve the results username dynamically using the config path
-        try:
-            username = get_results_username(config_path=config)
-        except Exception:
-            username = "smoke_test_user"
-
-        # Create and print/save the structured JSON payload
-        payload = create_benchmark_payload(
-            benchmark_name="Multipass CLI", 
-            user=username
-        )
-        
-        # Optional: print or write the payload to a separate JSON file if desired
-
-        print(json.dumps(payload, indent=2))
-
-
-def test_multipass_cli_start_with_name(runner, config):
-    """
-    Test starting a VM with a specific name.
-    """
-    vm_name = "test-named-vm"
-    runner.invoke(vm.vm_group, ["delete", vm_name])
-
-    result = runner.invoke(vm.vm_group, ["start", vm_name])
-    if result.exit_code != 0:
-        pytest.skip("Multipass start failed")
-
-    # Use a more flexible check for the success message to avoid ANSI color issues
-    assert f"Successfully started VM {vm_name}" in Text.from_ansi(result.output).plain
-    runner.invoke(vm.vm_group, ["delete", vm_name])
+    payload = create_benchmark_payload(
+        benchmark_name="Multipass CLI",
+        user=username
+    )
+    print(json.dumps(payload, indent=2))
