@@ -32,6 +32,7 @@ dependencies = [
     "python-manilaclient",
     "python-ironicclient",
     "python-swiftclient",
+    "python-chi",
     "paramiko",
     "fabric",
     "chameleon-blazarclient @ git+https://github.com/ChameleonCloud/python-blazarclient.git",
