@@ -36,7 +36,11 @@ Upload an existing public SSH key:
 cmx key upload ~/.ssh/id_rsa.pub
 ```
 
-If no path is supplied, the command defaults to using `~/.ssh/id_rsa.pub`.
+If no path is supplied, the command resolves the key path in the following priority:
+1. `key_path` defined in `clouds.yaml` for the active provider.
+2. Local file `~/.ssh/id_ed25519.pub`.
+3. Local file `~/.ssh/id_rsa.pub`.
+4. Any single file matching `~/.ssh/*.pub`. (If multiple files match, an error is raised and manual configuration in `clouds.yaml` is required).
 
 A custom cloud key name can also be specified:
 
@@ -44,7 +48,7 @@ A custom cloud key name can also be specified:
 cmx key upload ~/.ssh/id_rsa.pub --name my-cloud-key
 ```
 
-> **Note:** If `--name` is omitted, the OpenStack provider derives the key name from the public-key filename.
+> **Note:** If `--name` is omitted, the tool first checks for `key_name` in `clouds.yaml`. If still missing, the provider derives the key name from the public-key filename.
 
 ### Delete a Key
 Delete a key from the active provider:

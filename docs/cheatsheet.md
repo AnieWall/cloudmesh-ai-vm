@@ -26,7 +26,7 @@ A quick reference guide for all available Virtual Machine management commands in
 | | `security-group` | Manage security groups (list, create, assign) | `cmx vm security-group list` |
 | **SSH/Net** | `run [name] "cmd"` | Run a command on the VM via SSH | `cmx vm run "hostname"` |
 | | `ssh-config [name]` | Generate SSH config for `~/.ssh/config` | `cmx vm ssh-config` |
-| | `key upload <path>` | Upload a public key to the cloud | `cmx key upload ~/.ssh/id_rsa.pub` |
+| | `key upload [path]` | Upload a public key to the cloud (defaults to config or ~/.ssh/) | `cmx key upload ~/.ssh/id_rsa.pub` |
 | | `key delete <name>` | Delete an SSH key from the cloud | `cmx key delete my-key` |
 | **System** | `config` | Manage VM CLI configuration | `cmx vm config` |
 | | `account` | View account usage and quotas | `cmx vm account` |

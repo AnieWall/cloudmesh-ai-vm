@@ -87,7 +87,7 @@ PROVIDER_CONFIGS = [
     ProviderTestConfig(
         name="chameleon",
         provider_class=ChameleonProvider,
-        cloud_config={"image": "ubuntu-22.04", "flavor": "m1.small"},
+        cloud_config={"image": "CC-Ubuntu22.04", "flavor": "m1.small"},
         running_status="active",
         stopped_status="stopped",
         connectivity_strategy="ssh_execute"

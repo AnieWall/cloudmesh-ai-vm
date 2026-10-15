@@ -1,22 +1,22 @@
 # cloudmesh-ai-vm
 
-`cloudmesh-ai-vm` is a unified Python CLI tool (`cmx`) designed to simplify the management of Virtual Machines (VMs) across a diverse set of providers including local virtualization (Multipass, WSL2, VirtualBox) and cloud providers (OpenStack, AWS, Azure, GCP).
+`cloudmesh-ai-vm` is a unified Python CLI tool (`cmx`) that simplifies the deployment and management of Virtual Machines (VMs) across a diverse ecosystem of providers. By providing a single, consistent interface, it abstracts the complexities of different cloud APIs, allowing users to focus on their workloads rather than the underlying infrastructure.
 
 ## Key Features
 
-- **Unified Interface**: Manage different cloud providers using a single consistent CLI.
+- **Unified Interface**: Manage local virtualization (Multipass, WSL2, VirtualBox, Lima) and public clouds (OpenStack, AWS, Azure, GCP, Oracle) using one consistent CLI.
 - **Smart VM Lifecycle**:
-    - **Automatic Naming**: VMs are named automatically using a `<username>-<counter>` pattern (e.g., `gregor-1`).
+    - **Automatic Naming**: VMs are named automatically using a `<username>-<counter>` pattern (e.g., `gregor-1`), eliminating the need to invent unique names for every instance.
     - **Contextual Memory**: The tool remembers the last used VM, allowing you to run commands like `cmx vm stop` without specifying a name.
 - **Provider Flexibility**:
-    - **Default Cloud**: Manage your active provider via `cmx vm provider set <cloud>`.
-    - **Cloud Override**: Use the `--cloud` flag to temporarily use a different provider (e.g., `cmx vm start --cloud aws`).
-- **Remote Execution**: Execute commands directly on your VMs using `cmx vm run <command>`.
-- **SSH Key Management**: Scan for local SSH keys, verify their GitHub authentication status, and manage keys on GitHub (list and upload) directly from the CLI.
-- **Security Management**: Create, assign, and manage firewall rules for your VMs directly from the CLI (with smart-presets for web and database servers).
-- **SSH Integration**: Generate suggested SSH configuration entries for existing VMs to enable seamless access via `ssh <hostname>`.
-- **Interactive Shell**: Enter a dedicated VM management shell using `cmx vm -i`.
-- **SDK Native**: OpenStack providers (Chameleon, Jetstream) are implemented using the official OpenStack SDK for maximum stability and feature support.
+    - **Default Cloud**: Set your active provider via `cmx vm provider set <cloud>`.
+    - **Cloud Override**: Use the `--cloud` flag to temporarily target a different provider (e.g., `cmx vm start --cloud aws`).
+- **Remote Execution**: Execute commands directly on your VMs via SSH using `cmx vm run <command>`, bypassing the need for manual SSH login for simple tasks.
+- **Integrated SSH Key Management**: Scan for local keys, verify GitHub authentication, and upload public keys to cloud providers directly from the CLI.
+- **Security Management**: Create, assign, and manage firewall rules with smart-presets for common server roles (e.g., web, database).
+- **SSH Integration**: Automatically generate suggested SSH configuration entries for existing VMs to enable seamless access via `ssh <hostname>`.
+- **Interactive Shell**: Enter a dedicated VM management shell using `cmx vm -i` for faster iterative workflows.
+- **SDK-Native Implementations**: High-stability providers (like Chameleon and Jetstream) are implemented using official SDKs for maximum feature support.
 
 The full documentation is available at: <https://cloudmesh-ai.github.io/cloudmesh-ai-vm/>
 
@@ -25,7 +25,7 @@ The full documentation is available at: <https://cloudmesh-ai.github.io/cloudmes
 ### 1. Installation
 
 ```bash
-git clone https://github.com/your-repo/cloudmesh-ai-vm.git
+git clone https://github.com/cloudmesh/cloudmesh-ai-vm.git
 cd cloudmesh-ai-vm
 pip install -e .
 ```
@@ -37,13 +37,10 @@ Configure your credentials in `~/.config/cloudmesh/clouds.yaml`. See the [Config
 ### 3. Basic Usage
 
 ```bash
-# Check current default cloud
-cmx vm provider get
-
-# Set your default cloud
+# Set your default cloud (e.g., multipass, aws, openstack)
 cmx vm provider set multipass
 
-# Start a VM (will be named username-1, username-2, etc.)
+# Start a VM (automatically named username-1, username-2, etc.)
 cmx vm start
 
 # Run a command on the VM
@@ -51,9 +48,6 @@ cmx vm run "hostname"
 
 # Log into the VM (interactive)
 cmx vm login
-
-# Start an interactive SSH session
-cmx vm ssh
 
 # Stop the last started VM
 cmx vm stop
@@ -64,13 +58,11 @@ cmx vm start --cloud aws
 # List all VMs for current cloud
 cmx vm list
 
-# Manage SSH keys (Scan local, verify GitHub, or upload to GitHub)
-cmx key scan
-cmx key github upload ~/.ssh/id_rsa.pub
+# Upload your default public key (~/.ssh/id_rsa.pub) to the cloud
+cmx key upload
 
 # Enter interactive VM shell
 cmx vm -i
-
 ```
 
 ## Provider Support Matrix
@@ -79,12 +71,13 @@ cmx vm -i
 | :--- | :---: | :---: | :--- |
 | **Multipass** | ✅ | ✅ (Agent) | 🟢 |
 | **Lima** | ✅ | ✅ (Agent) | 🟢 |
-| **OpenStack** | ✅ | ✅ (SSH) | 🟢 (via Libcloud) |
+| **OpenStack** | ✅ | ✅ (SSH) | 🟢 (via Libcloud/SDK) |
 | **WSL2** | ✅ | ✅ (Direct) | 🟢 |
 | **VirtualBox** | ✅ | ✅ (GuestCtrl) | 🟢 |
 | **AWS** | ✅ | ✅ (SSH) | 🟢 (via Libcloud) |
 | **Azure** | ✅ | ✅ (SSH) | 🟢 (via Libcloud) |
 | **Google** | ✅ | ✅ (SSH) | 🟢 (via Libcloud) |
+| **Oracle** | ✅ | ✅ (SSH) | 🟢 (via Libcloud) |
 
 🟡 = has been implemented but not tested. We anticipate issues
 
