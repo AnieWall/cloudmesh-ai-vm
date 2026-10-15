@@ -1148,6 +1148,12 @@ class Provider(CloudBaseManager):
                 server.detach_floating_ip(fip, delete=True)
                 return True
             return False
+        except chi.exception.ResourceError as e:
+            if "404" in str(e) or "not found" in str(e).lower():
+                return False
+            from cloudmesh.ai.vm.logger import logger
+            logger.error(f"CHI release_floating_ip failed for {name}: {e}")
+            return False
         except Exception as e:
             from cloudmesh.ai.vm.logger import logger
             logger.error(f"CHI release_floating_ip failed for {name}: {e}")
