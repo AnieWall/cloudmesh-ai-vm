@@ -34,7 +34,7 @@ class CliStep:
     def __enter__(self):
         # 1. Timing
         if self.timer_name:
-            self.timer_ctx = StopWatch.timer(self.timer_name).__enter__()
+            StopWatch.start(self.timer_name)
 
         # 2. Header
         print_header(self.msg)
@@ -59,8 +59,10 @@ class CliStep:
                 traceback.print_exception(exc_type, exc_val, exc_tb, file=sys.stdout)
 
         # 3. Exit timing context
-        if self.timer_ctx:
-            self.timer_ctx.__exit__(exc_type, exc_val, exc_tb)
+        if self.timer_name:
+            StopWatch.stop(self.timer_name)
+            value = StopWatch.get(self.timer_name)
+            Console().print(f"[bold green]Step '{self.msg}' completed in {value:.2f} seconds[/bold green]\n")
 
 def cli_step(msg, timer_name=None):
     """Context manager for CLI test steps."""

@@ -87,7 +87,7 @@ PROVIDER_CONFIGS = [
     ProviderTestConfig(
         name="chameleon",
         provider_class=ChameleonProvider,
-        cloud_config={"image": "CC-Ubuntu22.04", "flavor": "m1.small"},
+        cloud_config={"image": "CC-Ubuntu22.04", "flavor": "m1.small", "username": "smoke-test-user", "key_name": "smoke-test-key"},
         running_status="active",
         stopped_status="stopped",
         connectivity_strategy="ssh_execute"
@@ -159,10 +159,27 @@ def create_temp_config(tmp_path, provider_cfg):
     config_dir.mkdir(parents=True)
     config_file = config_dir / "clouds.yaml"
 
+    # Read existing username from ~/.config/cloudmesh/clouds.yaml
+    real_config_path = os.path.expanduser("~/.config/cloudmesh/clouds.yaml")
+    username = "user"
+    if os.path.exists(real_config_path):
+        try:
+            with open(real_config_path, "r") as f:
+                real_config = yaml.safe_load(f)
+                if real_config and "username" in real_config:
+                    username = real_config["username"]
+        except Exception:
+            pass
+
+    # Generate a unique username for this test run
+    unique_username = f"{username}-smoke-lifecycle-{uuid.uuid4().hex[:4]}"
+
     config_data = {
-        "username": "smoke_test_user",
         "clouds": {
-            provider_cfg.name: provider_cfg.cloud_config
+            provider_cfg.name: {
+                "username": unique_username,
+                **provider_cfg.cloud_config
+            }
         }
     }
 
