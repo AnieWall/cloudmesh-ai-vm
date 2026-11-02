@@ -183,8 +183,6 @@ class Provider(LocalBaseManager):
             self.print(f"Failed to list Lima templates: {e}")
             return []
 
-        except Exception as e:
-            raise VMProviderError(f"Failed to delete Lima VM {name}: {e}")
 
     def list(self) -> builtins.list[dict[str, Any]]:
         """Lists Lima VMs.
@@ -289,6 +287,7 @@ class Provider(LocalBaseManager):
             return None
         except Exception:
             return None
+        
     def _save_default_vm(self, name: str):
         """Saves the VM name as the last used VM for this cloud."""
         from pathlib import Path
@@ -297,7 +296,6 @@ class Provider(LocalBaseManager):
         )
         state_file.parent.mkdir(parents=True, exist_ok=True)
         state_file.write_text(name)
-
 
     def check_requirements(self) -> bool:
         """
@@ -445,6 +443,34 @@ class Provider(LocalBaseManager):
             f"Timeout reached waiting for Lima VM {name} to reach status {target_status}."
         )
         return False
+
+    def info(self, name: str | None = None, kind: str = "vm") -> dict[str, Any]:
+        """Gets detailed information about a specific Lima VM.
+
+        The method attempts to retrieve detailed VM information via ``limactl info``.
+        If that command is unavailable or fails, it falls back to using the data
+        from ``self.list()`` to provide a minimal representation.
+        """
+        vm_name = name or self._get_default_vm(self.cloud_name)
+        if not vm_name:
+            raise VMResourceError("No VM name provided and no default VM found.")
+        if not self.exists(vm_name):
+            raise VMResourceError(f"VM {vm_name} not found.")
+        # Try the native info command first.
+        try:
+            result = self._run_command(["limactl", "info", vm_name], stream=False)
+            if result.stdout:
+                return {"Name": vm_name, "RawInfo": result.stdout.strip()}
+        except Exception:
+            # If the command is not supported or fails, ignore and fallback.
+            pass
+        # Fallback: locate the VM in the list output.
+        vms = self.list()
+        for vm in vms:
+            if isinstance(vm, dict) and vm.get("name") == vm_name:
+                return {"Name": vm_name, "RawInfo": vm}
+        # If still not found (should not happen), raise an error.
+        raise VMProviderError(f"Unable to retrieve info for Lima VM {vm_name}")
 
 # Compatibility alias for matrix tests and external imports.
 LimaManager = Provider
