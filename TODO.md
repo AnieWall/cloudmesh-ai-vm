@@ -4,7 +4,8 @@
 (All core stability items implemented)
 
 ## Medium Priority (Feature Parity)
-- [ ] NOT NEEDED: **Key Rotation**: Add `rotate_key` to `BaseVMProvider` and implement it for providers that support SSH key updates.
+ - [ ] NOT NEEDED: **Key Rotation**: Add `rotate_key` to `BaseVMProvider` and implement it for providers that support SSH key updates.
+ - [ ] Pre‑flight floating IP reservation with back‑off, jitter and rollback (see TODO-openstack-fip-preflight.md)
 
 ## Low Priority (UX & Polish)
 - [ ] **Unified CLI Output**: Standardize the return format of `list()` and `info()` methods across all providers to ensure consistent table rendering in the CLI.
