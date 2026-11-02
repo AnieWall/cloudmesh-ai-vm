@@ -6,13 +6,14 @@ This guide will walk you through the process of installing `cloudmesh-ai-vm` on 
 
 - **Python 3.x**: Ensure you have Python 3.8 or higher installed.
 - **Pip**: The Python package installer.
+- **Git**: Required to clone the repository.
 
 ### Python 3.15.2
 
 The project is working towards the use of **Python 3.15.2**. It is recommended to use this exact version to avoid compatibility issues. 
 
 !!! warning 
-    We are not yet completed with this migration, but if issues are found please immediatly communicate them so we can either fix them or roll back the python version.
+    We are not yet completed with this migration, but if issues are found please **immediately** communicate them so we can either fix them or roll back the Python version.
 
 You can verify your current Python version with:
 
@@ -41,13 +42,11 @@ python3.15 -m venv ~/ENV315
 
 We use this location and name as other cloudmesh-ai-* packages can reuse and test the same python version and assure compatibility.
 
-Make aslo sure you have the newest version of pip after you activated the python version with 
+Make also sure you have the newest version of pip after you activated the Python version with:
 
-
-
-```
-source ~/ENV3/bin/activate # use the method fro your OS
-pip install pip -U
+```bash
+source ~/ENV315/bin/activate  # use the method appropriate for your OS
+pip install --upgrade pip
 ```
 
 ## Setup Steps
@@ -88,6 +87,13 @@ Run the following command to ensure the CLI is installed and working:
 ```
 
 If you see the help menu, you are ready to go!
+
+**Optional:** Build the project's documentation locally to verify that the MkDocs site renders correctly:
+
+```bash
+make doc
+```
+This will install the documentation dependencies (MkDocs, Material theme, etc.) and generate a static site in the `site/` directory.
 
 ### 4. Install using uv
 
