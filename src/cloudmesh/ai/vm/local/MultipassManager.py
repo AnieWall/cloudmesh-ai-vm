@@ -1,10 +1,12 @@
 import re
 import shlex
+import builtins
 from typing import Any
 
 from cloudmesh.ai.vm.exceptions import ConfigError, VMProviderError, VMResourceError
 
 from ..LocalBaseManager import LocalBaseManager
+from cloudmesh.ai.vm.logger import logger
 
 
 class Provider(LocalBaseManager):
@@ -155,7 +157,7 @@ class Provider(LocalBaseManager):
             self._run_command(command)
             return True
         except Exception as e:
-            self.print(f"Error restarting VM {name}: {e}")
+            logger.error(f"Error restarting VM {name}: {e}")
             return False
 
     def reset(self, name: str | None = None) -> bool:
@@ -167,10 +169,10 @@ class Provider(LocalBaseManager):
         import platform
 
         if platform.system() != "Darwin":
-            self.print("Daemon reset via launchctl is only supported on macOS.")
+            logger.error("Daemon reset via launchctl is only supported on macOS.")
             return False
 
-        self.print("Resetting Multipass daemon...")
+        logger.info("Resetting Multipass daemon...")
         if os.geteuid() == 0:
             cmd = ["launchctl", "kickstart", "-k", "system/com.canonical.multipassd"]
         else:
@@ -189,7 +191,7 @@ class Provider(LocalBaseManager):
                 return True
             except Exception:
                 if not os.isatty(0):
-                    self.print(
+                    logger.error(
                         "Error: sudo privileges are required to reset the "
                         "Multipass daemon, but no TTY is available for "
                         "password entry."
@@ -207,10 +209,10 @@ class Provider(LocalBaseManager):
             self._run_command(cmd)
             return True
         except Exception as e:
-            self.print(f"Error resetting Multipass daemon: {e}")
+            logger.error(f"Error resetting Multipass daemon: {e}")
             return False
 
-    def get_flavors(self, **kwargs) -> list[dict[str, Any]]:
+    def get_flavors(self, **kwargs) -> builtins.list[dict[str, Any]]:
         """Lists available hardware profiles for Multipass."""
         return [
             {"name": "default", "cpu": 1, "ram": "1GiB", "disk": "5GiB"},
@@ -218,7 +220,7 @@ class Provider(LocalBaseManager):
             {"name": "large", "cpu": 4, "ram": "4GiB", "disk": "20GiB"},
         ]
 
-    def list(self) -> list[dict[str, Any]]:
+    def list(self) -> builtins.list[dict[str, Any]]:
         """Lists all Multipass VMs."""
         try:
             import json
@@ -277,7 +279,7 @@ class Provider(LocalBaseManager):
             raise VMProviderError(f"Error getting info for VM {name}: {e}")
             raise VMProviderError(f"Error getting info for VM {name}: {e}")
 
-    def get_images(self, **kwargs) -> list[dict[str, Any]]:
+    def get_images(self, **kwargs) -> builtins.list[dict[str, Any]]:
         """Lists available Multipass images using 'multipass find --format json'."""
         try:
             import json
@@ -301,7 +303,7 @@ class Provider(LocalBaseManager):
                 )
             return images
         except Exception as e:
-            self.print(f"Error listing Multipass images: {e}")
+            logger.error(f"Error listing Multipass images: {e}")
             return []
 
     def check_requirements(self) -> bool:
@@ -335,7 +337,7 @@ class Provider(LocalBaseManager):
         Uses 'multipass exec' to append the key to authorized_keys.
         """
         if not vm_name:
-            self.print("Error: upload_key requires a vm_name for Multipass.")
+            logger.error("Error: upload_key requires a vm_name for Multipass.")
             return False
 
         try:
@@ -343,7 +345,7 @@ class Provider(LocalBaseManager):
 
             key_path = os.path.expanduser(key_path)
             if not os.path.exists(key_path):
-                self.print(f"Error: Key file not found: {key_path}")
+                logger.error(f"Error: Key file not found: {key_path}")
                 return False
 
             with open(key_path, "r") as f:
@@ -374,10 +376,10 @@ class Provider(LocalBaseManager):
             ]
 
             self._run_command(cmd)
-            self.print(f"Successfully uploaded key {key_name} to VM {vm_name}")
+            logger.info(f"Successfully uploaded key {key_name} to VM {vm_name}")
             return True
         except Exception as e:
-            self.print(f"Error uploading key to {vm_name}: {e}")
+            logger.error(f"Error uploading key to {vm_name}: {e}")
             return False
 
     def delete_key(self, key_name: str, vm_name: str | None = None) -> bool:
@@ -387,10 +389,10 @@ class Provider(LocalBaseManager):
         ``~/.ssh/authorized_keys``.
         """
         if not vm_name:
-            self.print("Error: delete_key requires a vm_name for Multipass.")
+            logger.error("Error: delete_key requires a vm_name for Multipass.")
             return False
         if not key_name:
-            self.print("Error: delete_key requires a key_name.")
+            logger.error("Error: delete_key requires a key_name.")
             return False
 
         try:
@@ -421,17 +423,17 @@ class Provider(LocalBaseManager):
                 escaped_key,
             ]
             self._run_command(cmd)
-            self.print(f"Successfully deleted key {key_name} from VM {vm_name}")
+            logger.info(f"Successfully deleted key {key_name} from VM {vm_name}")
             return True
         except Exception as e:
-            self.print(f"Error deleting key from {vm_name}: {e}")
+            logger.error(f"Error deleting key from {vm_name}: {e}")
             return False
 
-    def get_keys(self) -> list[dict[str, Any]]:
+    def get_keys(self) -> builtins.list[dict[str, Any]]:
         """Multipass manages its own keys internally."""
         return [{"name": "multipass-default-key", "path": "~/.ssh/multipass_rsa"}]
 
-    def get_security_groups(self) -> list[dict[str, Any]]:
+    def get_security_groups(self) -> builtins.list[dict[str, Any]]:
         """Multipass uses host networking/firewall."""
         return [{"name": "default", "description": "Host network access"}]
 
@@ -487,8 +489,6 @@ class Provider(LocalBaseManager):
         Polls the Multipass VM status until it matches target_status.
         """
         import time
-
-        from cloudmesh.ai.vm.logger import logger
 
         logger.info(
             f"Waiting for Multipass VM {name} to reach status {target_status}..."
