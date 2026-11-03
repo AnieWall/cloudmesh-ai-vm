@@ -221,15 +221,41 @@ class Provider(LocalBaseManager):
             return vms
         except Exception as e:
             raise VMProviderError(f"Error listing Multipass VMs: {e}")
-
     def info(self, name: str | None = None, kind: str = "vm") -> dict[str, Any]:
-        """Gets detailed information about a Multipass VM."""
+        """Gets detailed information about a Multipass VM.
+
+        The command is executed with ``--format json`` and the JSON payload is
+        parsed into a Python ``dict``.  Multipass returns a top‑level ``"info"``
+        key whose value is a mapping from VM name to the VM details.  This method
+        extracts the inner dictionary for the requested VM (or returns the full
+        parsed JSON if the expected structure is not present).
+        """
         if not name or not self.exists(name):
             raise VMResourceError(f"VM {name} not found in multipass.")
         try:
-            result = self._run_command([self.CLI, "info", name], stream=False)
+            result = self._run_command(
+                [self.CLI, "info", name, "--format", "json"], stream=False
+            )
+            # Parse the JSON output
+            import json
+
+            parsed = json.loads(result.stdout)
+            # Typical Multipass JSON structure: {"info": {"<name>": {...}}}
+            if isinstance(parsed, dict) and "info" in parsed:
+                vm_data = parsed["info"]
+                # Direct match on the provided name
+                if name in vm_data:
+                    return vm_data[name]
+                # Fallback: case‑insensitive match
+                for key, value in vm_data.items():
+                    if key.lower() == name.lower():
+                        return value
+                # If no specific entry, return the whole parsed dict
+                return parsed
+            # If the format is unexpected, fall back to raw text for debugging
             return {"Name": name, "RawInfo": result.stdout}
         except Exception as e:
+            raise VMProviderError(f"Error getting info for VM {name}: {e}")
             raise VMProviderError(f"Error getting info for VM {name}: {e}")
 
     def get_images(self, **kwargs) -> list[dict[str, Any]]:
