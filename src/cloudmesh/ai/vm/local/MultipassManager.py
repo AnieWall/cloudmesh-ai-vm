@@ -1,5 +1,6 @@
 import builtins
 import re
+import shlex
 from typing import Any
 
 from cloudmesh.ai.vm.exceptions import ConfigError, VMProviderError, VMResourceError
@@ -298,10 +299,13 @@ class Provider(LocalBaseManager):
             with open(key_path, "r") as f:
                 pub_key = f.read().strip()
 
-            escaped_key = pub_key.replace("'", "'\\''")
-            escaped_name = key_name.replace("'", "'\\''")
+            # Build the key entry (public key plus a comment) and safely quote it.
+            # The result of shlex.quote includes surrounding single quotes, which
+            # are safe to embed directly in the Bash -c argument.
+            key_entry = f'{pub_key} # {key_name}'
+            escaped_entry = shlex.quote(key_entry)
 
-            # command: multipass exec <vm> -- bash -c "mkdir -p ~/.ssh && chmod 700 ~/.ssh && printf '%s\n' '<key> # <name>' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+            # command: multipass exec <vm> -- bash -c "mkdir -p ~/.ssh && chmod 700 ~/.ssh && printf '%s\n' <quoted-entry> >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
             cmd = [
                 "multipass",
                 "exec",
@@ -309,7 +313,7 @@ class Provider(LocalBaseManager):
                 "--",
                 "bash",
                 "-c",
-                f"mkdir -p ~/.ssh && chmod 700 ~/.ssh && printf '%s\\n' '{escaped_key} # {escaped_name}' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys",
+                f"mkdir -p ~/.ssh && chmod 700 ~/.ssh && printf '%s\n' {escaped_entry} >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys",
             ]
 
             self._run_command(cmd)
@@ -333,8 +337,14 @@ class Provider(LocalBaseManager):
 
         try:
             # Escape for sed regex and the delimiter /
-            escaped_key_name = re.escape(key_name).replace("/", r"\/")
-            # Use argument passing to bash -c to avoid shell injection
+            # Safely embed the key name into a sed command. shlex.quote returns a
+            # shell‑quoted string (including surrounding single quotes). We strip
+            # those outer quotes because the value will be placed inside a Bash
+            # single‑quoted pattern literal.
+            quoted_name = shlex.quote(key_name)
+            inner = quoted_name[1:-1] if len(quoted_name) >= 2 else quoted_name
+
+            # Construct the command without using a $1 placeholder.
             cmd = [
                 "multipass",
                 "exec",
@@ -342,9 +352,7 @@ class Provider(LocalBaseManager):
                 "--",
                 "bash",
                 "-c",
-                'sed -i "/$1/d" ~/.ssh/authorized_keys',
-                "bash",
-                escaped_key_name,
+                f"sed -i '/{inner}/d' ~/.ssh/authorized_keys",
             ]
             self._run_command(cmd)
             self.print(f"Successfully deleted key {key_name} from VM {vm_name}")
