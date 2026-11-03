@@ -8,10 +8,14 @@ from ..LocalBaseManager import LocalBaseManager
 
 
 class Provider(LocalBaseManager):
+    """Multipass implementation of the CloudBaseManager.
+
+    Uses the ``multipass`` CLI tool to manage local VMs.
     """
-    Multipass implementation of the CloudBaseManager.
-    Uses the 'multipass' CLI tool to manage local VMs.
-    """
+    # Class‑level constant for the CLI binary name. All command invocations
+    # reference this constant to avoid hard‑coded literals throughout the
+    # provider implementation.
+    CLI = "multipass"
 
     def __init__(self, config: Any, console=None, **kwargs):
         """Initialize the Multipass provider.
@@ -47,7 +51,7 @@ class Provider(LocalBaseManager):
                 vm_exists = False
             if vm_exists:
                 try:
-                    self._run_command(["multipass", "start", name], stream=True)
+                    self._run_command([self.CLI, "start", name], stream=True)
                     return name
                 except Exception as e:
                     raise VMProviderError(
@@ -73,7 +77,7 @@ class Provider(LocalBaseManager):
                 memory = flavor_details.get("ram", memory)
                 disk = flavor_details.get("disk", disk)
 
-        command = ["multipass", "launch"]
+        command = [self.CLI, "launch"]
 
         if cpus:
             command.extend(["-c", str(cpus)])
@@ -103,7 +107,7 @@ class Provider(LocalBaseManager):
             raise VMResourceError(f"VM {name} not found in multipass.")
 
         try:
-            self._run_command(["multipass", "stop", name])
+            self._run_command([self.CLI, "stop", name])
             return True
         except Exception as e:
             raise VMProviderError(f"Error stopping VM {name}: {e}")
@@ -114,7 +118,7 @@ class Provider(LocalBaseManager):
             raise VMResourceError(f"VM {name} not found in multipass.")
 
         try:
-            self._run_command(["multipass", "delete", "--purge", name])
+            self._run_command([self.CLI, "delete", "--purge", name])
             return True
         except Exception as e:
             raise VMProviderError(f"Error deleting VM {name}: {e}")
@@ -128,7 +132,7 @@ class Provider(LocalBaseManager):
             self.stop(name)
 
             # Start the VM using multipass start (instead of launch)
-            command = ["multipass", "start", name]
+            command = [self.CLI, "start", name]
             self._run_command(command)
             return True
         except Exception as e:
@@ -167,7 +171,9 @@ class Provider(LocalBaseManager):
             except Exception:
                 if not os.isatty(0):
                     self.print(
-                        "Error: sudo privileges are required to reset the Multipass daemon, but no TTY is available for password entry."
+                        "Error: sudo privileges are required to reset the "
+                        "Multipass daemon, but no TTY is available for "
+                        "password entry."
                     )
                     return False
                 cmd = [
@@ -199,7 +205,7 @@ class Provider(LocalBaseManager):
             import json
 
             result = self._run_command(
-                ["multipass", "list", "--format", "json"], stream=False
+                [self.CLI, "list", "--format", "json"], stream=False
             )
             data = json.loads(result.stdout)
             vms = []
@@ -221,7 +227,7 @@ class Provider(LocalBaseManager):
         if not name or not self.exists(name):
             raise VMResourceError(f"VM {name} not found in multipass.")
         try:
-            result = self._run_command(["multipass", "info", name], stream=False)
+            result = self._run_command([self.CLI, "info", name], stream=False)
             return {"Name": name, "RawInfo": result.stdout}
         except Exception as e:
             raise VMProviderError(f"Error getting info for VM {name}: {e}")
@@ -232,7 +238,7 @@ class Provider(LocalBaseManager):
             import json
 
             result = self._run_command(
-                ["multipass", "find", "--format", "json"], stream=False
+                [self.CLI, "find", "--format", "json"], stream=False
             )
             data = json.loads(result.stdout)
 
@@ -257,13 +263,13 @@ class Provider(LocalBaseManager):
         """Checks if the requirements for this provider are met on the current system."""
         import shutil
 
-        return shutil.which("multipass") is not None
+        return shutil.which(self.CLI) is not None
 
     @property
     def version(self) -> list[str]:
         """Returns the first line of the multipass version output."""
         try:
-            result = self._run_command(["multipass", "version"], stream=False)
+            result = self._run_command([self.CLI, "version"], stream=False)
             lines = result.stdout.strip().split("\n")
             versions = [
                 line.strip()
@@ -304,15 +310,22 @@ class Provider(LocalBaseManager):
             key_entry = f'{pub_key} # {key_name}'
             escaped_entry = shlex.quote(key_entry)
 
-            # command: multipass exec <vm> -- bash -c "mkdir -p ~/.ssh && chmod 700 ~/.ssh && printf '%s\n' <quoted-entry> >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+            # Build the remote command to create the .ssh directory, set proper
+            # permissions, and append the quoted public key to authorized_keys.
+            # Build the remote bash command in a readable multi‑line string.
+            remote_cmd = (
+                f"mkdir -p ~/.ssh && chmod 700 ~/.ssh && "
+                f"printf '%s\n' {escaped_entry} >> ~/.ssh/authorized_keys && "
+                "chmod 600 ~/.ssh/authorized_keys"
+            )
             cmd = [
-                "multipass",
+                self.CLI,
                 "exec",
                 vm_name,
                 "--",
                 "bash",
                 "-c",
-                f"mkdir -p ~/.ssh && chmod 700 ~/.ssh && printf '%s\n' {escaped_entry} >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys",
+                remote_cmd,
             ]
 
             self._run_command(cmd)
@@ -325,7 +338,8 @@ class Provider(LocalBaseManager):
     def delete_key(self, key_name: str, vm_name: str | None = None) -> bool:
         """
         Deletes a public key from a Multipass VM.
-        Implementation: removes the line containing the key_name from ~/.ssh/authorized_keys.
+        Implementation removes the line containing the ``key_name`` from
+        ``~/.ssh/authorized_keys``.
         """
         if not vm_name:
             self.print("Error: delete_key requires a vm_name for Multipass.")
@@ -345,7 +359,7 @@ class Provider(LocalBaseManager):
             # escapes the value for the argument list.
             escaped_key = shlex.quote(key_name)
             cmd = [
-                "multipass",
+                self.CLI,
                 "exec",
                 vm_name,
                 "--",
@@ -353,7 +367,11 @@ class Provider(LocalBaseManager):
                 "-c",
                 # Delete lines containing the key name, write to a temporary
                 # file and atomically replace the original authorized_keys.
-                'grep -vF "$1" ~/.ssh/authorized_keys > ~/.ssh/authorized_keys.tmp && mv ~/.ssh/authorized_keys.tmp ~/.ssh/authorized_keys',
+                (
+                    "grep -vF \"$1\" ~/.ssh/authorized_keys > "
+                    "~/.ssh/authorized_keys.tmp && "
+                    "mv ~/.ssh/authorized_keys.tmp ~/.ssh/authorized_keys"
+                ),
                 "bash",
                 escaped_key,
             ]
@@ -382,7 +400,7 @@ class Provider(LocalBaseManager):
         try:
             # multipass exec <vm> -- <command>
             result = self._run_command(
-                ["multipass", "exec", name, "--", "sh", "-c", cmd]
+                [self.CLI, "exec", name, "--", "sh", "-c", cmd]
             )
             return result.stdout
         except Exception as e:
@@ -444,7 +462,8 @@ class Provider(LocalBaseManager):
             time.sleep(5)
 
         logger.error(
-            f"Timeout reached waiting for Multipass VM {name} to reach status {target_status}."
+            f"Timeout reached waiting for Multipass VM {name} "
+            f"to reach status {target_status}."
         )
         return False
 
