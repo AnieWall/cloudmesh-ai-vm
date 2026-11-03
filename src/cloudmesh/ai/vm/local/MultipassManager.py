@@ -112,6 +112,25 @@ class Provider(LocalBaseManager):
         except Exception as e:
             raise VMProviderError(f"Error stopping VM {name}: {e}")
 
+    def suspend(self, name: str | None = None) -> bool:
+        """Suspends a Multipass VM.
+
+        If ``name`` is not provided, the default VM name is resolved via
+        :meth:`_get_default_vm`. The VM must exist; otherwise a
+        :class:`VMResourceError` is raised. The operation is performed using
+        ``multipass suspend <name>``. Returns ``True`` on success or raises
+        :class:`VMProviderError` on failure.
+        """
+        if not name:
+            name = self._get_default_vm(self.cloud_name)
+        if not name or not self.exists(name):
+            raise VMResourceError(f"VM {name} not found in multipass.")
+        try:
+            self._run_command([self.CLI, "suspend", name])
+            return True
+        except Exception as e:
+            raise VMProviderError(f"Error suspending VM {name}: {e}")
+
     def delete(self, name: str | None = None) -> bool:
         """Deletes a Multipass VM."""
         if not name or not self.exists(name):

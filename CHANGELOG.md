@@ -4,8 +4,9 @@
 
 ### Added
 - **Version Bump**: Updated package version to `1.9.0` (see `pyproject.toml`).
-- **Compatibility Aliases**: Added provider aliases (`AwsManager`, `AzureManager`, `GoogleManager`, `OracleManager`, `ChameleonManager`, `JetstreamManager`) to support matrix tests and historic imports.
-- **Floating‑IP Utilities Tests**: Added comprehensive unit tests for the new `cloudmesh.ai.vm.fip_utils` helpers (`list_unassigned_fips`, `lock_and_select_fip`, `allocate_fip_with_retry`, `release_fip`).
+ - **Compatibility Aliases**: Added provider aliases (`AwsManager`, `AzureManager`, `GoogleManager`, `OracleManager`, `ChameleonManager`, `JetstreamManager`) to support matrix tests and historic imports.
+ - **Multipass suspend support added**; resume via `start`.
+ - **Floating‑IP Utilities Tests**: Added comprehensive unit tests for the new `cloudmesh.ai.vm.fip_utils` helpers (`list_unassigned_fips`, `lock_and_select_fip`, `allocate_fip_with_retry`, `release_fip`).
 - **CLI `--noip` Flag Test**: Added unit test ensuring the `cmx vm start --noip` flow passes `assign_ip=False` to providers.
 - **Floating IP Description**: Floating IP allocations now include the Cloudmesh username in the ``description`` field for easier identification and tracking.
 
