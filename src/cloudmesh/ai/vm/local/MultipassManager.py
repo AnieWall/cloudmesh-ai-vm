@@ -208,9 +208,8 @@ class Provider(LocalBaseManager):
                     {
                         "name": item.get("name"),
                         "status": item.get("state"),
-                        "ip": item.get("ipv4", [None])[0]
-                        if item.get("ipv4")
-                        else "None",
+                        # Return None for missing or empty IPv4 entries
+                        "ip": item.get("ipv4", [None])[0] if item.get("ipv4") else None,
                     }
                 )
             return vms
