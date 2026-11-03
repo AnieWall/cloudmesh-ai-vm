@@ -232,9 +232,9 @@ def test_delete_key_escaping(provider):
         is True
     )
 
-    # Safely embed the key name into a sed command using shlex.quote
-    quoted_name = shlex.quote(key_name)
-    inner = quoted_name[1:-1] if len(quoted_name) >= 2 else quoted_name
+    # The implementation now uses a portable grep‑based deletion. The key name
+    # is passed as a separate argument to ``bash -c`` and referenced via $1.
+    escaped_key = shlex.quote(key_name)
 
     expected_cmd = [
         "multipass",
@@ -243,7 +243,9 @@ def test_delete_key_escaping(provider):
         "--",
         "bash",
         "-c",
-        f"sed -i '/{inner}/d' ~/.ssh/authorized_keys",
+        'grep -vF "$1" ~/.ssh/authorized_keys > ~/.ssh/authorized_keys.tmp && mv ~/.ssh/authorized_keys.tmp ~/.ssh/authorized_keys',
+        "bash",
+        escaped_key,
     ]
 
     provider._run_command.assert_called_with(expected_cmd)

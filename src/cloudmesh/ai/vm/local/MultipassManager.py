@@ -336,15 +336,15 @@ class Provider(LocalBaseManager):
             return False
 
         try:
-            # Escape for sed regex and the delimiter /
-            # Safely embed the key name into a sed command. shlex.quote returns a
-            # shell‑quoted string (including surrounding single quotes). We strip
-            # those outer quotes because the value will be placed inside a Bash
-            # single‑quoted pattern literal.
-            quoted_name = shlex.quote(key_name)
-            inner = quoted_name[1:-1] if len(quoted_name) >= 2 else quoted_name
-
-            # Construct the command without using a $1 placeholder.
+            # Use a portable approach to delete a line containing the key name.
+            # ``sed -i`` behaves differently on macOS (requires an empty string
+            # argument for the backup extension). Instead we rely on ``grep``
+            # which works uniformly across GNU and BSD variants.
+            #
+            # We pass the key name as a separate argument to ``bash -c`` and
+            # reference it via ``$1`` inside the script. ``shlex.quote`` safely
+            # escapes the value for the argument list.
+            escaped_key = shlex.quote(key_name)
             cmd = [
                 "multipass",
                 "exec",
@@ -352,7 +352,11 @@ class Provider(LocalBaseManager):
                 "--",
                 "bash",
                 "-c",
-                f"sed -i '/{inner}/d' ~/.ssh/authorized_keys",
+                # Delete lines containing the key name, write to a temporary
+                # file and atomically replace the original authorized_keys.
+                'grep -vF "$1" ~/.ssh/authorized_keys > ~/.ssh/authorized_keys.tmp && mv ~/.ssh/authorized_keys.tmp ~/.ssh/authorized_keys',
+                "bash",
+                escaped_key,
             ]
             self._run_command(cmd)
             self.print(f"Successfully deleted key {key_name} from VM {vm_name}")
