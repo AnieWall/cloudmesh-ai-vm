@@ -133,6 +133,155 @@ class Provider(LocalBaseManager):
         except Exception as e:
             raise VMProviderError(f"Error suspending VM {name}: {e}")
 
+    def resume(self, name: str | None = None) -> bool:
+        """Resumes a suspended Multipass VM.
+
+        This method explicitly starts an existing VM without attempting to
+        launch a new instance. It mirrors the behaviour of ``multipass start``
+        but raises an error if the VM does not exist, providing clearer
+        semantics for a *resume* operation.
+        """
+        if not name:
+            name = self._get_default_vm(self.cloud_name)
+        if not name or not self.exists(name):
+            raise VMResourceError(f"VM {name} not found in multipass.")
+        try:
+            self._run_command([self.CLI, "start", name])
+            return True
+        except Exception as e:
+            raise VMProviderError(f"Error resuming VM {name}: {e}")
+
+    # ---------------------------------------------------------------------
+    # Snapshot Management
+    # ---------------------------------------------------------------------
+    def snapshot(self, name: str | None = None, snapshot_name: str | None = None) -> bool:
+        """Creates a snapshot of a Multipass VM.
+
+        Parameters
+        ----------
+        name: str | None
+            The name of the VM to snapshot. If omitted the provider will
+            attempt to resolve the default VM name via ``_get_default_vm``.
+        snapshot_name: str | None
+            The desired name for the snapshot. This argument is required – a
+            snapshot cannot be created without an identifier.
+
+        Returns
+        -------
+        bool
+            ``True`` if the snapshot command succeeded.
+
+        Raises
+        ------
+        VMResourceError
+            If the target VM does not exist.
+        VMProviderError
+            If the underlying ``multipass snapshot`` command fails.
+        """
+        if not name:
+            name = self._get_default_vm(self.cloud_name)
+        if not name or not self.exists(name):
+            raise VMResourceError(f"VM {name} not found in multipass.")
+        if not snapshot_name:
+            raise ValueError("snapshot_name must be provided to create a snapshot")
+        try:
+            # ``multipass snapshot <instance> <snapshot-name>`` creates a snapshot.
+            self._run_command([self.CLI, "snapshot", name, snapshot_name])
+            return True
+        except Exception as e:
+            raise VMProviderError(f"Error creating snapshot for VM {name}: {e}")
+
+    def restore_snapshot(self, name: str | None = None, snapshot_name: str | None = None) -> bool:
+        """Restores a previously created snapshot for a Multipass VM.
+
+        Parameters
+        ----------
+        name: str | None
+            The name of the VM to restore. If omitted the default VM is used.
+        snapshot_name: str | None
+            The name of the snapshot to restore. Must be supplied.
+
+        Returns
+        -------
+        bool
+            ``True`` on successful restoration.
+
+        Raises
+        ------
+        VMResourceError
+            If the VM does not exist.
+        VMProviderError
+            If the ``multipass restore`` command fails.
+        """
+        if not name:
+            name = self._get_default_vm(self.cloud_name)
+        if not name or not self.exists(name):
+            raise VMResourceError(f"VM {name} not found in multipass.")
+        if not snapshot_name:
+            raise ValueError("snapshot_name must be provided to restore a snapshot")
+        try:
+            # The command ``multipass restore <instance> <snapshot-name>``
+            # restores the VM to the state captured in the snapshot.
+            self._run_command([self.CLI, "restore", name, snapshot_name])
+            return True
+        except Exception as e:
+            raise VMProviderError(f"Error restoring snapshot for VM {name}: {e}")
+
+    def list_snapshots(self, name: str | None = None) -> builtins.list[dict[str, Any]]:
+        """Lists snapshots associated with a Multipass VM.
+
+        The implementation first attempts to extract the ``snapshots`` field from
+        the structured result of :meth:`info`, which returns JSON when possible.
+        If that key is absent (e.g., on older Multipass versions without JSON
+        support), the method falls back to parsing the plain‑text output of the
+        ``multipass snapshots <instance>`` command.
+
+        Returns a list of dictionaries – each representing a snapshot. The exact
+        keys depend on the output format; at a minimum ``name`` is included.
+        """
+        if not name:
+            name = self._get_default_vm(self.cloud_name)
+        if not name or not self.exists(name):
+            raise VMResourceError(f"VM {name} not found in multipass.")
+        try:
+            # Prefer JSON via info() which includes a ``snapshots`` dict if
+            # Multipass provides it.
+            info = self.info(name)
+            snapshots = info.get("snapshots")
+            if isinstance(snapshots, dict):
+                # Convert mapping of snapshot name -> metadata dict to a list.
+                snap_list: builtins.list[dict[str, Any]] = []
+                for snap_name, snap_meta in snapshots.items():
+                    entry: dict[str, Any] = {"name": snap_name}
+                    if isinstance(snap_meta, dict):
+                        entry.update(snap_meta)
+                    snap_list.append(entry)
+                return snap_list
+            # -----------------------------------------------------------------
+            # Fallback: parse the plain‑text ``multipass snapshots`` output.
+            # -----------------------------------------------------------------
+            result = self._run_command([self.CLI, "snapshots", name], stream=False)
+            lines = result.stdout.splitlines()
+            snap_list: builtins.list[dict[str, Any]] = []
+            for line in lines:
+                # Skip header lines that contain column titles or separators.
+                if not line.strip() or line.lower().startswith("name") or line.startswith("---"):
+                    continue
+                # The CLI typically separates columns by whitespace.
+                parts = line.split()
+                if not parts:
+                    continue
+                # The first column is the snapshot name.
+                snap_name = parts[0]
+                entry = {"name": snap_name}
+                # Preserve any additional columns as generic key/value pairs.
+                if len(parts) > 1:
+                    entry["details"] = " ".join(parts[1:])
+                snap_list.append(entry)
+            return snap_list
+        except Exception as e:
+            raise VMProviderError(f"Error listing snapshots for VM {name}: {e}")
+
     def delete(self, name: str | None = None) -> bool:
         """Deletes a Multipass VM."""
         if not name or not self.exists(name):
@@ -246,38 +395,90 @@ class Provider(LocalBaseManager):
     def info(self, name: str | None = None, kind: str = "vm") -> dict[str, Any]:
         """Gets detailed information about a Multipass VM.
 
-        The command is executed with ``--format json`` and the JSON payload is
-        parsed into a Python ``dict``.  Multipass returns a top‑level ``"info"``
-        key whose value is a mapping from VM name to the VM details.  This method
-        extracts the inner dictionary for the requested VM (or returns the full
-        parsed JSON if the expected structure is not present).
+        The implementation prefers the JSON output of ``multipass info`` and
+        converts it into a flat, easy‑to‑consume dictionary.  If the JSON format
+        is unavailable (e.g., on older Multipass versions) the method falls back
+        to parsing the human‑readable text output.
+
+        The returned dictionary is **structured** and includes at least the
+        following keys (additional provider‑specific keys are preserved):
+
+        - ``name`` – the VM name
+        - ``status`` – the VM state (e.g., ``Running``)
+        - ``ip`` – the first IPv4 address as a string (``""`` when missing)
+        - ``ipv4`` – the raw list of IPv4 addresses (may be empty)
+
+        All other fields from the Multipass output are retained unchanged.  The
+        keys are not normalised here – callers can use
+        :meth:`cloudmesh.ai.vm.base.BaseVMProvider.normalize_vm_info` if a lower‑
+        case mapping is desired.
         """
         if not name or not self.exists(name):
             raise VMResourceError(f"VM {name} not found in multipass.")
         try:
+            # Try JSON first – it provides a clean, machine‑readable structure.
             result = self._run_command(
                 [self.CLI, "info", name, "--format", "json"], stream=False
             )
-            # Parse the JSON output
             import json
 
-            parsed = json.loads(result.stdout)
-            # Typical Multipass JSON structure: {"info": {"<name>": {...}}}
+            try:
+                parsed = json.loads(result.stdout)
+            except json.JSONDecodeError:
+                parsed = None
+
             if isinstance(parsed, dict) and "info" in parsed:
                 vm_data = parsed["info"]
-                # Direct match on the provided name
-                if name in vm_data:
-                    return vm_data[name]
-                # Fallback: case‑insensitive match
-                for key, value in vm_data.items():
-                    if key.lower() == name.lower():
-                        return value
-                # If no specific entry, return the whole parsed dict
+                # Find the exact or case‑insensitive match for the VM name.
+                vm_entry = vm_data.get(name)
+                if vm_entry is None:
+                    for key, value in vm_data.items():
+                        if key.lower() == name.lower():
+                            vm_entry = value
+                            name = key  # Preserve the canonical name.
+                            break
+                if vm_entry is not None:
+                    # Build a flat dict that contains the VM name and a few
+                    # convenience keys (status, ip, ipv4) while keeping the
+                    # original payload intact.
+                    flat: dict[str, Any] = {"name": name}
+                    # Preserve the original JSON payload under ``metadata`` for
+                    # callers that need the full detail set.
+                    flat.update(vm_entry)
+                    # Normalise the common fields for a consistent API.
+                    flat["status"] = vm_entry.get("state")
+                    # Preserve the original capitalised key for backward compatibility
+                    # (used by ``resolve_vm_name`` and older client code).
+                    flat["State"] = vm_entry.get("state")
+                    ipv4_list = vm_entry.get("ipv4") or []
+                    flat["ipv4"] = ipv4_list
+                    flat["ip"] = ipv4_list[0] if ipv4_list else ""
+                    return flat
+                # If we cannot locate a specific entry, return the raw parsed JSON.
                 return parsed
-            # If the format is unexpected, fall back to raw text for debugging
-            return {"Name": name, "RawInfo": result.stdout}
+            # -----------------------------------------------------------------
+            # Fallback: parse the plain‑text output (pre‑JSON Multipass versions).
+            # -----------------------------------------------------------------
+            raw = result.stdout
+            info: dict[str, Any] = {"name": name}
+            for line in raw.splitlines():
+                if ":" not in line:
+                    continue
+                key, val = line.split(":", 1)
+                key = key.strip().lower().replace(" ", "_")
+                val = val.strip()
+                if key == "ipv4":
+                    # IPv4 may contain multiple addresses separated by spaces.
+                    ips = [ip for ip in val.split() if ip]
+                    info["ipv4"] = ips
+                    info["ip"] = ips[0] if ips else ""
+                else:
+                    info[key] = val
+            # Preserve backward‑compatible capitalised key if present.
+            if "state" in info:
+                info["State"] = info["state"]
+            return info
         except Exception as e:
-            raise VMProviderError(f"Error getting info for VM {name}: {e}")
             raise VMProviderError(f"Error getting info for VM {name}: {e}")
 
     def get_images(self, **kwargs) -> builtins.list[dict[str, Any]]:
