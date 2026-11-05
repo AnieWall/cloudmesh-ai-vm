@@ -31,7 +31,7 @@ import humanize
 from keystoneauth1.exceptions.catalog import EndpointNotFound
 
 from cloudmesh.ai.vm.CloudBaseManager import CloudBaseManager
-from cloudmesh.ai.vm.exceptions import ConfigError, VMProviderError, VMResourceError
+from cloudmesh.ai.vm.exceptions import ConfigError, VMProviderError, VMResourceError, ProviderFeatureNotSupported
 from cloudmesh.ai.vm.logger import logger
 
 from .ChameleonAuthManager import authenticate_chi_from_cloud
@@ -66,6 +66,33 @@ class Provider(CloudBaseManager):
         if isinstance(obj, (datetime.datetime, datetime.date)):
             return obj.isoformat()
         return str(obj)
+
+    def check_requirements(self) -> bool:
+        """Check that the required libraries for Chameleon are available.
+
+        The Chameleon provider relies on the ``chi`` library for core
+        functionality.  The optional ``openstack`` library is also useful for
+        certain features but is not mandatory.
+
+        Returns:
+            bool: ``True`` if the requirements are satisfied.
+
+        Raises:
+            ProviderFeatureNotSupported: If the mandatory ``chi`` library cannot be imported.
+        """
+        try:
+            import chi  # type: ignore
+        except Exception:
+            # ``chi`` is essential; raise a feature‑not‑supported exception to
+            # signal that provider requirements are missing.
+            raise ProviderFeatureNotSupported(self.cloud_name, "chi library is required")
+        # ``openstack`` is optional; failure to import should not prevent the
+        # provider from functioning, so we ignore any import errors.
+        try:
+            import openstack  # type: ignore
+        except Exception:
+            pass
+        return True
 
     def _get_reservation_details(self, reservation_id):
         """Finds the lease and reservation details for a given reservation ID."""
