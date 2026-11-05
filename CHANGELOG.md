@@ -16,6 +16,11 @@
 ### Fixed
 - No functional changes beyond the version bump and test additions.
 
+## [1.9.1] - 2026-11-05
+
+### Added
+- **Provider Requirements**: Implemented functional “Requirements” checking for the Chameleon provider. The `cmx vm doctor` command now validates the mandatory `chi` library (and optionally the `openstack` client) instead of always skipping. Updated documentation to reflect this change.
+
 ## [1.8.0] - 2026-10-31
 
 ### Added
