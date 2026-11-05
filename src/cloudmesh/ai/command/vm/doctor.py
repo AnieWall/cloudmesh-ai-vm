@@ -9,6 +9,8 @@ from cloudmesh.ai.command._shared.exceptions import handle_errors
 from cloudmesh.ai.command._shared.ui import render_table
 # Import the new configuration validation helper
 from cloudmesh.ai.vm.diagnostics.config_validator import run_all_config_checks
+# Import the specific exception used to signal optional features are not supported
+from cloudmesh.ai.vm.exceptions import ProviderFeatureNotSupported
 
 
 def _format_validation_result(result):
@@ -230,6 +232,15 @@ def doctor(
                     ]
                 )
 
+        except ProviderFeatureNotSupported as e:
+            # Optional feature not available – treat it as a skipped check.
+            rows.append(
+                [
+                    "Provider Info",
+                    _status_label("SKIP"),
+                    f"{e.message}",
+                ]
+            )
         except Exception as exc:
             failures += 1
             rows.append(

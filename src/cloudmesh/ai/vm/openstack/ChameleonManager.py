@@ -1609,6 +1609,34 @@ class Provider(CloudBaseManager):
             self.print(f"Error fetching Chameleon account info: {e}")
             return {"error": f"Failed to fetch Chameleon account info: {e!s}"}
 
+    def get_provider_info(self) -> dict[str, Any]:
+        """Return static provider metadata.
+
+        * ``provider`` – human readable name ("Chameleon").
+        * ``cloud_name`` – the key used in ``clouds.yaml``.
+        * ``version`` – provider‑specific client/SDK version (or "Unknown").
+        * ``config`` – a minimal, non‑secret subset of the provider's configuration.
+        """
+        # Retrieve the raw cloud configuration (handles dict, StateManager, etc.)
+        cloud_cfg = self.get_cloud_config(self.cloud_name)
+
+        # Version information is not directly exposed by the ``chi`` library.
+        # We fall back to "Unknown" but allow an explicit config entry to override.
+        version = cloud_cfg.get("version", "Unknown")
+
+        # Build a safe config dictionary with only non‑sensitive fields.
+        safe_cfg: dict[str, Any] = {}
+        for key in ("region", "auth_url"):
+            if key in cloud_cfg:
+                safe_cfg[key] = cloud_cfg[key]
+
+        return {
+            "provider": "Chameleon",
+            "cloud_name": self.cloud_name,
+            "version": version,
+            "config": safe_cfg,
+        }
+
     def get_images(self, **kwargs) -> builtins.list[dict[str, Any]]:
         """Lists all available images in Chameleon Cloud using python-chi."""
         # Mock mode: return an empty list to avoid external calls.
