@@ -38,10 +38,10 @@ def _render_section(title: str, columns: list[str], rows: list[list]):
 
 @click.command()
 @click.pass_context
-@click.option("--json", is_flag=True, help="Output in JSON format")
+@click.option("--json", "json_flag", is_flag=True, help="Output in JSON format")
 @vm_options
 @handle_errors
-def status(ctx: click.Context, json: bool = False, **kwargs) -> None:
+def status(ctx: click.Context, json_flag: bool = False, **kwargs) -> None:
     """Show a status summary of VMs, floating IPs and reservations.
 
     When ``--cloud`` is provided (via ``vm_options``) the command operates on
@@ -80,7 +80,7 @@ def status(ctx: click.Context, json: bool = False, **kwargs) -> None:
             "floating_ips": fips,
             "reservations": reservations,
         }
-        if json:
+        if json_flag:
             console.print(json.dumps(json_output, indent=4))
             return
 
@@ -170,7 +170,7 @@ def status(ctx: click.Context, json: bool = False, **kwargs) -> None:
             "floating_ips": fips,
             "reservations": reservations,
         }
-        if json:
+        if json_flag:
             any_output = True
             continue
 
@@ -235,10 +235,11 @@ def status(ctx: click.Context, json: bool = False, **kwargs) -> None:
         )
         console.print("")
 
-    if json:
+    # After processing all clouds, handle JSON output or fallback message.
+    if json_flag:
+        # Print the aggregated JSON document for all clouds.
         console.print(json.dumps(json_output, indent=4))
         return
-
     if not any_output:
         console.print("No resources found on any enabled providers.")
 
