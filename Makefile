@@ -12,6 +12,9 @@ VERSION_FILE := VERSION
 GIT          := git
 PYENVVERSION := $(shell pyenv version-name)
 
+# Repository information for API calls (override if needed)
+GITHUB_REPO   := cloudmesh-ai/cloudmesh-ai-vm
+
 .PHONY: help install clean build test reinstall \ doc view check tag release test-html test-cov setup-test uninstall-all tmp-setup doc view publish requirements
 
 help:
@@ -125,3 +128,26 @@ reinstall: uninstall-all clean
 publish:
 	@echo "Deploying MkDocs site to GitHub Pages..."
 	mkdocs gh-deploy --version $$(cat VERSION)
+
+# ---------------------------------------------------------------------
+# docs-github: Deploy documentation to GitHub Pages and trigger the
+# documentation workflow (docs.yml) automatically.
+# This target builds the docs, pushes the built site to the gh-pages branch
+# (via mkdocs gh-deploy) and then fires the workflow using the GitHub API.
+# It requires the environment variable GITHUB_TOKEN to be set to a personal
+# access token (or a GitHub Actions token) with the "repo" scope.  If the
+# token is not present the workflow trigger is skipped.
+# ---------------------------------------------------------------------
+docs-github: docs-deps
+	@echo "Deploying documentation to GitHub Pages..."
+	mkdocs gh-deploy --force
+	@echo "Triggering documentation workflow via GitHub API..."
+	@if [ -z "$(GITHUB_TOKEN)" ]; then \
+	    echo "⚠️ GITHUB_TOKEN not set – skipping workflow dispatch."; \
+	else \
+	    curl -X POST \
+	        -H "Accept: application/vnd.github+json" \
+	        -H "Authorization: token $(GITHUB_TOKEN)" \
+	        https://api.github.com/repos/$(GITHUB_REPO)/actions/workflows/docs.yml/dispatches \
+	        -d '{"ref":"main"}'; \
+	fi
