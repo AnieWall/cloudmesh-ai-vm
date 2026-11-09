@@ -1,5 +1,7 @@
 # cloudmesh-ai-vm
 
+Gregor von Laszewski
+
 ## Key Features
 
 - **Unified Interface**: Manage different cloud providers using a single consistent CLI.
