@@ -1,6 +1,4 @@
-import builtins
 import os
-import re
 from typing import Any
 
 from cloudmesh.ai.vm.exceptions import (
@@ -35,7 +33,7 @@ class Provider(LocalBaseManager):
         self._verify_installation()
 
     @property
-    def version(self) -> builtins.list[str]:
+    def version(self) -> list[str]:
         """Returns the version string of the Lima provider (limactl).
 
         The method runs ``limactl --version`` and returns the first line of
@@ -157,7 +155,7 @@ class Provider(LocalBaseManager):
         except Exception as e:
             raise VMProviderError(f"Failed to delete Lima VM {name}: {e}")
 
-    def get_images(self, **kwargs) -> builtins.list[dict[str, Any]]:
+    def get_images(self, **kwargs) -> list[dict[str, Any]]:
         """Lists available Lima templates."""
         try:
             # limactl start --list-templates returns a list of templates
@@ -184,17 +182,27 @@ class Provider(LocalBaseManager):
             return []
 
 
-    def list(self) -> builtins.list[dict[str, Any]]:
+    def list(self) -> list[dict[str, Any]] | None:
         """Lists Lima VMs.
 
-        The command ``limactl list -f json`` is preferred, but the unit tests
-        provide plain‑text output to verify backward compatibility. This method
-        therefore attempts JSON parsing first and falls back to parsing the
-        columnar text format when JSON decoding fails.
+        The method runs ``limactl list`` (no explicit ``-f json`` flag).  If the
+        command returns JSON, the JSON payload is returned.  If the output
+        contains the warning ``WARN[0000] No instance found`` we emit a helpful
+        message and return ``None`` (JSON ``null``).  When the output is the
+        classic columnar table, we fall back to parsing that table into a list
+        of dictionaries.
         """
         try:
             result = self._run_command(["limactl", "list"], stream=False)
             output = result.stdout.strip()
+            # ------------------------------------------------------------
+            # Special case: Lima reports that no instance exists.
+            # ------------------------------------------------------------
+            if "WARN[0000] No instance found" in output:
+                self.print(
+                    "WARN[0000] No instance found. Run `limactl create` to create an instance"
+                )
+                return None
             if not output:
                 return []
             import json
@@ -208,7 +216,6 @@ class Provider(LocalBaseManager):
                             vms.append({k.lower(): v for k, v in entry.items()})
                 elif isinstance(data, dict):
                     # Some versions may wrap the list under a ``list`` key.
-                
                     if "list" in data and isinstance(data["list"], list):
                         for entry in data["list"]:
                             if isinstance(entry, dict):
@@ -237,14 +244,14 @@ class Provider(LocalBaseManager):
                     vms.append(vm)
                 return vms
         except Exception as e:
-            print(f"DEBUG: LimaManager.list - Exception occurred: {e}")
+            self.print(f"DEBUG: LimaManager.list - Exception occurred: {e}")
             return []
 
 
     def exists(self, name: str) -> bool:
         """Checks if a Lima VM exists."""
-        vms = self.list()
-        # Handle case where vms might be a list of dicts
+        # ``self.list()`` may return ``None`` when no instance is found; treat it as empty.
+        vms = self.list() or []
         for vm in vms:
             if isinstance(vm, dict):
                 vm_name = vm.get("name")
@@ -308,7 +315,7 @@ class Provider(LocalBaseManager):
             return False
         return shutil.which("limactl") is not None
 
-    def validate_config(self) -> dict[str, builtins.list[str]]:
+    def validate_config(self) -> dict[str, list[str]]:
         """
         Validates Lima configuration.
         """
@@ -399,14 +406,14 @@ class Provider(LocalBaseManager):
         """
         return [{"name": "default"}]
 
-    def get_keys(self) -> builtins.list[dict[str, Any]]:
+    def get_keys(self) -> list[dict[str, Any]]:
         """Returns a list of SSH key descriptors for Lima.
 
         The test suite expects a single key named ``lima-ssh-key``.
         """
         return [{"name": "lima-ssh-key"}]
 
-    def get_security_groups(self) -> builtins.list[dict[str, Any]]:
+    def get_security_groups(self) -> list[dict[str, Any]]:
         """Returns a placeholder security‑group list for Lima.
 
         Local providers typically use host networking; we return a default
@@ -428,7 +435,7 @@ class Provider(LocalBaseManager):
         start_time = time.time()
 
         while time.time() - start_time < timeout:
-            vms = self.list()
+            vms = self.list() or []
             vm = next((v for v in vms if isinstance(v, dict) and v.get("name") == name), None)
             if vm:
                 # Lima's list() returns lower-case keys. We normalize status.
@@ -451,6 +458,9 @@ class Provider(LocalBaseManager):
         If that command is unavailable or fails, it falls back to using the data
         from ``self.list()`` to provide a minimal representation.
         """
+        # NOTE: The ``kind`` argument is part of the abstract base‑class API but is
+        # not used by the Lima implementation. It is kept for signature
+        # compatibility with other providers.
         vm_name = name or self._get_default_vm(self.cloud_name)
         if not vm_name:
             raise VMResourceError("No VM name provided and no default VM found.")
@@ -464,8 +474,10 @@ class Provider(LocalBaseManager):
         except Exception:
             # If the command is not supported or fails, ignore and fallback.
             pass
-        # Fallback: locate the VM in the list output.
-        vms = self.list()
+        # Fallback: locate the VM in the list output. ``self.list()`` may return
+        # ``None`` when Lima reports that no instance exists; treat that as an
+        # empty list.
+        vms = self.list() or []
         for vm in vms:
             if isinstance(vm, dict) and vm.get("name") == vm_name:
                 return {"Name": vm_name, "RawInfo": vm}

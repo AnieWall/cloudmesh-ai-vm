@@ -72,10 +72,12 @@ cmx vm stop
 cmx vm start --cloud aws
 
 # List all VMs for current cloud
-cmx vm list
-```
-
-For a detailed description of the floating‑IP workflow, see the documentation page:
+75 | cmx vm list
+76 | ```
+77 | 
+78 | > **Note (Lima provider)**: When using the Lima provider, if no VM instances exist `cmx vm list` will emit a warning `WARN[0000] No instance found` and return `null` (JSON `null`). The CLI prints a helpful message and does not raise an error.
+79 | 
+80 | For a detailed description of the floating‑IP workflow, see the documentation page:
 `docs/floating-ip-workflow.md`.
 cmx vm list
 \n# Docker Container Management\n\n```bash\n# Run a container with a custom command (to keep it alive)\ncmx container run --name my-cont --image alpine sleep 3600\n\n# List running containers\ncmx container list\n\n# Get container info\ncmx container info my-cont\n\n# List IPs of all running containers\ncmx container ip list\n\n# Lifecycle management\ncmx container restart my-cont\ncmx container suspend pause my-cont\ncmx container suspend resume my-cont\n\n# Image management\ncmx container image pull alpine:latest\ncmx container image list\n\n# Stop and delete\ncmx container stop my-cont\ncmx container delete my-cont\n```\n

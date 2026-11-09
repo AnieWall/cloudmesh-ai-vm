@@ -21,6 +21,11 @@
 ### Added
 - **Provider Requirements**: Implemented functional “Requirements” checking for the Chameleon provider. The `cmx vm doctor` command now validates the mandatory `chi` library (and optionally the `openstack` client) instead of always skipping. Updated documentation to reflect this change.
 
+## [1.9.2] - 2026-11-09
+
+### Added
+- **Lima `list()` Enhancement**: Updated `LimaManager.list()` to detect the warning `WARN[0000] No instance found`. When this condition occurs, the method prints a helpful message and returns `None` (JSON `null`). Existing JSON parsing and columnar table fallback remain unchanged.
+- **Documentation Updates**: Added notes about the new `list()` behavior to `README.md` and `docs/providers/local/lima.md`.
 ## [1.8.0] - 2026-10-31
 
 ### Added

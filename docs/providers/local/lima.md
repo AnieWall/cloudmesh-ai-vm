@@ -29,6 +29,7 @@ cmx vm provider set lima
 # Start a VM with default config
 cmx vm start
 
-# List local Lima VMs
-cmx vm list
-```
+32 | # List local Lima VMs
+33 | cmx vm list
+34 | # Note: If no Lima instances exist, this command prints a warning (WARN[0000] No instance found) and returns `null` JSON.
+35 | ```
