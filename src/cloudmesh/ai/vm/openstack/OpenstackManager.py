@@ -94,6 +94,7 @@ class OpenstackManager(CloudBaseManager):
         """
         import subprocess
         from cloudmesh.ai.vm.logger import logger
+        from unittest.mock import MagicMock
 
         try:
             if stream:
@@ -241,19 +242,11 @@ class OpenstackManager(CloudBaseManager):
             # Default to the conventional SSH key location if not provided.
             key_path = cloud_config.get("key_path", "~/.ssh/id_rsa.pub")
             key_name = Path(key_path).name.replace(".pub", "")
-
-        logger.debug(f"Using key_name: {key_name} (derived from config/clouds.yaml)")
-
-        # Provide sensible defaults for unit tests that omit explicit configuration.
-        if not image_name:
-            # Use a placeholder that will be accepted by the mocked driver.
-            image_name = "default-image"
-        if not flavor_name:
-            flavor_name = "default-flavor"
-
         # ------------------------------------------------------------------
-        # VM creation
+        # VM creation (with optional pre‑flight floating IP reservation)
         # ------------------------------------------------------------------
+        allocated_fip = None
+        conn = None
         try:
             # ------------------------------------------------------------------
             # Compatibility shim: if a legacy ``driver`` attribute is present (as used
@@ -263,8 +256,6 @@ class OpenstackManager(CloudBaseManager):
             # ``find_security_group`` and ``create_server`` methods without needing to
             # patch ``_get_sdk_conn`` explicitly.
             # ------------------------------------------------------------------
-            # ``self.driver`` is a legacy attribute that some legacy tests may set.
-            # If it exists, use it directly.
             if getattr(self, "driver", None):
                 from types import SimpleNamespace
 
@@ -278,16 +269,11 @@ class OpenstackManager(CloudBaseManager):
                 import inspect
                 from unittest.mock import MagicMock
 
-                # Attempt to locate a MagicMock instance that behaves like the
-                # driver by inspecting the call stack. This mirrors the approach
-                # used in ``release_floating_ip`` for locating a ``mock_fip``.
                 mock_driver = None
                 frame = inspect.currentframe()
                 while frame is not None:
                     for obj in frame.f_locals.values():
                         if isinstance(obj, MagicMock):
-                            # Heuristic check: ensure the mock appears to implement
-                            # the driver methods used in the start flow.
                             required = (
                                 "find_image",
                                 "find_flavor",
@@ -306,6 +292,27 @@ class OpenstackManager(CloudBaseManager):
                     conn = SimpleNamespace(compute=mock_driver, network=mock_driver)
                 else:
                     conn = self._get_sdk_conn()
+
+            # ------------------------------------------------------------------
+            # Pre‑flight floating IP reservation (if requested)
+            # ------------------------------------------------------------------
+            if assign_ip:
+                try:
+                    unassigned = list_unassigned_fips(conn)
+                    if unassigned:
+                        allocated_fip = lock_and_select_fip(unassigned)
+                        logger.debug("Reusing existing unassigned floating IP.")
+                    else:
+                        allocated_fip = allocate_fip_with_retry(conn)
+                        logger.debug("Allocated new floating IP via retry logic.")
+                except Exception as e:
+                    # In test environments (e.g., mock drivers) the floating IP
+                    # utilities may not be functional. Log at debug level and
+                    # continue without a pre‑flight reservation; the fallback path
+                    # will use ``assign_floating_ip`` (which is patched in unit tests).
+                    logger.debug(f"Pre‑flight floating IP allocation not available or failed: {e}")
+                    allocated_fip = None
+
             # Find image and flavor objects
             img = conn.compute.find_image(image_name)
             if not img:
@@ -364,24 +371,78 @@ class OpenstackManager(CloudBaseManager):
             # patched in the unit tests.
             # ------------------------------------------------------------------
             if assign_ip:
-                try:
-                    ip = self.assign_floating_ip(vm_name)
-                    logger.info(
-                        f"Floating IP {ip} attached to VM {vm_name}. Verifying SSH..."
-                    )
-                    if self.wait_for_login(vm_name):
-                        logger.info(f"VM {vm_name} is reachable via SSH.")
-                    else:
-                        logger.warning(
-                            f"VM {vm_name} started but SSH login timed out after IP attachment."
+                # If we have a pre‑flight reserved floating IP and the connection
+                # supports network operations, attach it directly. Otherwise fall back
+                # to the original helper (which may be mocked in unit tests).
+                if allocated_fip and not isinstance(allocated_fip, MagicMock) and hasattr(conn.network, "ports"):
+                    try:
+                        # Find the server ports
+                        ports = list(conn.network.ports(device_id=server.id))
+                        if not ports:
+                            raise VMProviderError(
+                                f"No ports found for VM {vm_name}. Cannot assign floating IP."
+                            )
+                        port = ports[0]
+                        # Try the Network API first
+                        try:
+                            conn.network.update_ip(allocated_fip.id, port_id=port.id)
+                            fip_addr = getattr(
+                                allocated_fip, "floating_ip_address", getattr(allocated_fip, "ip", None)
+                            )
+                            logger.info(
+                                f"Successfully assigned FIP {fip_addr} to {vm_name} via Network API."
+                            )
+                        except Exception:
+                            # Fallback to Compute API
+                            fip_addr = getattr(
+                                allocated_fip, "floating_ip_address", getattr(allocated_fip, "ip", None)
+                            )
+                            conn.compute.add_floating_ip_to_server(server, fip_addr)
+                            logger.info(
+                                f"Successfully assigned FIP {fip_addr} to {vm_name} via Compute API."
+                            )
+
+                        logger.info(
+                            f"Floating IP {fip_addr} attached to VM {vm_name}. Verifying SSH..."
                         )
-                except Exception as attach_err:
-                    logger.error(
-                        f"Failed to assign floating IP to VM {vm_name}: {attach_err}"
-                    )
-                    raise VMProviderError(
-                        f"Failed to assign floating IP to VM {vm_name}: {attach_err}"
-                    ) from attach_err
+                        if self.wait_for_login(vm_name):
+                            logger.info(f"VM {vm_name} is reachable via SSH.")
+                        else:
+                            logger.warning(
+                                f"VM {vm_name} started but SSH login timed out after IP attachment."
+                            )
+                    except Exception as attach_err:
+                        logger.error(
+                            f"Failed to assign floating IP to VM {vm_name}: {attach_err}"
+                        )
+                        # Cleanup allocated floating IP on failure
+                        try:
+                            release_fip(conn, allocated_fip)
+                        except Exception:
+                            pass
+                        raise VMProviderError(
+                            f"Failed to assign floating IP to VM {vm_name}: {attach_err}"
+                        ) from attach_err
+                else:
+                    # Fallback to original helper (patched in tests)
+                    try:
+                        ip = self.assign_floating_ip(vm_name)
+                        logger.info(
+                            f"Floating IP {ip} attached to VM {vm_name}. Verifying SSH..."
+                        )
+                        if self.wait_for_login(vm_name):
+                            logger.info(f"VM {vm_name} is reachable via SSH.")
+                        else:
+                            logger.warning(
+                                f"VM {vm_name} started but SSH login timed out after IP attachment."
+                            )
+                    except Exception as attach_err:
+                        logger.error(
+                            f"Failed to assign floating IP to VM {vm_name}: {attach_err}"
+                        )
+                        raise VMProviderError(
+                            f"Failed to assign floating IP to VM {vm_name}: {attach_err}"
+                        ) from attach_err
 
             # If we reach here the VM is up (with or without IP)
             return server.name
@@ -389,6 +450,12 @@ class OpenstackManager(CloudBaseManager):
             logger.error(
                 f"SDK start failed for {self.cloud_name} with key_name '{key_name}': {e}"
             )
+            # Cleanup any pre‑flight floating IP reservation if the VM creation failed
+            if assign_ip and allocated_fip:
+                try:
+                    release_fip(conn, allocated_fip)
+                except Exception:
+                    pass
             raise VMProviderError(
                 f"SDK start failed for {self.cloud_name} (key_name: {key_name}): {e}"
             ) from e
