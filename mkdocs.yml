@@ -29,6 +29,7 @@ nav:
     - Overview: manual.md
     - VM Status: vm_status.md
     - VM Purge: vm_purge.md
+    - All Commands: manual_commands.md
   - CLI Reference: cli.md
   - Changelog: CHANGELOG.md
   - API: api.md
