@@ -30,6 +30,31 @@ nav:
     - VM Status: vm_status.md
     - VM Purge: vm_purge.md
     - All Commands: manual_commands.md
+    - Commands:
+        - Config: command_pages/config.md
+        - Start: command_pages/start.md
+        - Stop: command_pages/stop.md
+        - Restart: command_pages/restart.md
+        - Suspend: command_pages/suspend.md
+        - Shelve: command_pages/shelve.md
+        - Unshelve: command_pages/unshelve.md
+        - Delete: command_pages/delete.md
+        - Reset: command_pages/reset.md
+        - List: command_pages/list.md
+        - Info: command_pages/info.md
+        - Image: command_pages/image.md
+        - Flavor: command_pages/flavor.md
+        - Security-Group: command_pages/security_group.md
+        - Provider: command_pages/provider.md
+        - Key: command_pages/key.md
+        - Run: command_pages/run.md
+        - SSH: command_pages/ssh.md
+        - Login: command_pages/login.md
+        - SSH-Config: command_pages/ssh-config.md
+        - Account: command_pages/account.md
+        - Horizon: command_pages/horizon.md
+        - Status: command_pages/status.md
+        - Purge: command_pages/purge.md
   - CLI Reference: cli.md
   - Changelog: CHANGELOG.md
   - API: api.md
