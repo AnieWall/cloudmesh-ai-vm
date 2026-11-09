@@ -1,6 +1,6 @@
 import docker
 from typing import Any
-from ....vm.CloudBaseManager import CloudBaseManager
+from cloudmesh.ai.vm.CloudBaseManager import CloudBaseManager
 from cloudmesh.ai.vm.exceptions import ProviderFeatureNotSupported
 from cloudmesh.ai.vm.logger import logger
 
