@@ -227,7 +227,7 @@ class Provider(LocalBaseManager):
         except Exception as e:
             raise VMProviderError(f"Error restoring snapshot for VM {name}: {e}")
 
-    def list_snapshots(self, name: str | None = None) -> builtins.list[dict[str, Any]]:
+    def list_snapshots(self, name: str | None = None) -> list[dict[str, Any]]:
         """Lists snapshots associated with a Multipass VM.
 
         The implementation first attempts to extract the ``snapshots`` field from
@@ -312,56 +312,95 @@ class Provider(LocalBaseManager):
     def reset(self, name: str | None = None) -> bool:
         """
         Resets the Multipass daemon.
-        This is a provider-level operation and ignores the name parameter.
+        This is a provider‑level operation and ignores the ``name`` parameter.
+
+        The original implementation only supported macOS via ``launchctl`` and
+        returned ``False`` on any other platform.  Issue #114 requests a Linux
+        fallback using ``systemctl``.  The updated logic now supports both macOS
+        and Linux, while preserving the existing behaviour for macOS (including
+        the non‑interactive ``sudo`` handling).  For any other platform a clear
+        error is logged and ``False`` is returned.
         """
         import os
         import platform
 
-        if platform.system() != "Darwin":
-            logger.error("Daemon reset via launchctl is only supported on macOS.")
-            return False
+        current_system = platform.system()
 
-        logger.info("Resetting Multipass daemon...")
-        if os.geteuid() == 0:
-            cmd = ["launchctl", "kickstart", "-k", "system/com.canonical.multipassd"]
-        else:
-            # Try non-interactive sudo first to avoid hanging in CI/scripts
-            try:
-                self._run_command(
-                    [
+        # -----------------------------------------------------------------
+        # macOS implementation – unchanged apart from minor refactoring.
+        # -----------------------------------------------------------------
+        if current_system == "Darwin":
+            logger.info("Resetting Multipass daemon on macOS...")
+            if os.geteuid() == 0:
+                cmd = ["launchctl", "kickstart", "-k", "system/com.canonical.multipassd"]
+                try:
+                    self._run_command(cmd)
+                    return True
+                except Exception as e:
+                    logger.error(f"Error resetting Multipass daemon: {e}")
+                    return False
+            else:
+                # Try non‑interactive sudo first to avoid hanging in CI/scripts
+                try:
+                    self._run_command(
+                        [
+                            "sudo",
+                            "-n",
+                            "launchctl",
+                            "kickstart",
+                            "-k",
+                            "system/com.canonical.multipassd",
+                        ]
+                    )
+                    return True
+                except Exception:
+                    if not os.isatty(0):
+                        logger.error(
+                            "Error: sudo privileges are required to reset the "
+                            "Multipass daemon, but no TTY is available for "
+                            "password entry."
+                        )
+                        return False
+                    cmd = [
                         "sudo",
-                        "-n",
                         "launchctl",
                         "kickstart",
                         "-k",
                         "system/com.canonical.multipassd",
                     ]
-                )
+                    try:
+                        self._run_command(cmd)
+                        return True
+                    except Exception as e:
+                        logger.error(f"Error resetting Multipass daemon: {e}")
+                        return False
+
+        # -----------------------------------------------------------------
+        # Linux implementation – new for Issue #114.
+        # -----------------------------------------------------------------
+        if current_system == "Linux":
+            logger.info("Resetting Multipass daemon on Linux via systemctl...")
+            try:
+                self._run_command([
+                    "systemctl",
+                    "restart",
+                    "snap.multipass.multipassd.service",
+                ])
                 return True
-            except Exception:
-                if not os.isatty(0):
-                    logger.error(
-                        "Error: sudo privileges are required to reset the "
-                        "Multipass daemon, but no TTY is available for "
-                        "password entry."
-                    )
-                    return False
-                cmd = [
-                    "sudo",
-                    "launchctl",
-                    "kickstart",
-                    "-k",
-                    "system/com.canonical.multipassd",
-                ]
+            except Exception as e:
+                logger.error(f"Error resetting Multipass daemon on Linux: {e}")
+                return False
 
-        try:
-            self._run_command(cmd)
-            return True
-        except Exception as e:
-            logger.error(f"Error resetting Multipass daemon: {e}")
-            return False
+        # -----------------------------------------------------------------
+        # Unsupported platform.
+        # -----------------------------------------------------------------
+        logger.error(
+            f"Daemon reset is not supported on platform {current_system}. "
+            "Supported platforms are macOS (Darwin) and Linux."
+        )
+        return False
 
-    def get_flavors(self, **kwargs) -> builtins.list[dict[str, Any]]:
+    def get_flavors(self, **kwargs) -> list[dict[str, Any]]:
         """Lists available hardware profiles for Multipass."""
         return [
             {"name": "default", "cpu": 1, "ram": "1GiB", "disk": "5GiB"},
@@ -369,7 +408,7 @@ class Provider(LocalBaseManager):
             {"name": "large", "cpu": 4, "ram": "4GiB", "disk": "20GiB"},
         ]
 
-    def list(self) -> builtins.list[dict[str, Any]]:
+    def list(self) -> list[dict[str, Any]]:
         """Lists all Multipass VMs."""
         try:
             import json
@@ -481,7 +520,7 @@ class Provider(LocalBaseManager):
         except Exception as e:
             raise VMProviderError(f"Error getting info for VM {name}: {e}")
 
-    def get_images(self, **kwargs) -> builtins.list[dict[str, Any]]:
+    def get_images(self, **kwargs) -> list[dict[str, Any]]:
         """Lists available Multipass images using 'multipass find --format json'."""
         try:
             import json
@@ -631,11 +670,11 @@ class Provider(LocalBaseManager):
             logger.error(f"Error deleting key from {vm_name}: {e}")
             return False
 
-    def get_keys(self) -> builtins.list[dict[str, Any]]:
+    def get_keys(self) -> list[dict[str, Any]]:
         """Multipass manages its own keys internally."""
         return [{"name": "multipass-default-key", "path": "~/.ssh/multipass_rsa"}]
 
-    def get_security_groups(self) -> builtins.list[dict[str, Any]]:
+    def get_security_groups(self) -> list[dict[str, Any]]:
         """Multipass uses host networking/firewall."""
         return [{"name": "default", "description": "Host network access"}]
 
