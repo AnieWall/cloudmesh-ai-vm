@@ -8,10 +8,11 @@
  - [ ] Pre‑flight floating IP reservation with back‑off, jitter and rollback (see TODO-openstack-fip-preflight.md)
 
 ## Low Priority (UX & Polish)
-11 | - [x] **Unified CLI Output**: Standardize the return format of `list()` and `info()` methods across all providers. Implemented structured JSON parsing for `MultipassManager.info` and ensured `list()` already returns a consistent dict list.
+  - [x] **Unified CLI Output**: Standardize the return format of `list()` and `info()` methods across all providers. Implemented structured JSON parsing for `MultipassManager.info` and ensured `list()` already returns a consistent dict list.
 - [ ] **Interactive VM Console**: Implement a `console` command to attach to a VM's serial console where supported (e.g., Multipass, OpenStack).
 - [ ] **Enhanced Cost Templates**: Replace the `.md` cost templates with a structured JSON/YAML format that can be parsed by the `get_cost` method for real-time estimation.
-- [ ] **Unified IP Abstraction**: Create a `NetworkInterface` class to handle the differences between Floating IPs, Public IPs, and Internal IPs across providers.
+ - [ ] **Unified IP Abstraction**: Create a `NetworkInterface` class to handle the differences between Floating IPs, Public IPs, and Internal IPs across providers.
+ - [x] **Jetstream Manager Refactor**: Tightened type hints, expanded docstring, added logger warning for unknown flavors, and exposed __all__ for clean imports.
 
 ## Provider Compliance Suite Enhancements
 - [ ] **Compliance Matrix Reporting**: Create a custom report/table showing the compliance status of every provider across all tested features.
