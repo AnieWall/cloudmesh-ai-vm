@@ -966,9 +966,9 @@ class Provider(CloudBaseManager):
             server_id = getattr(server, "id", None)
             server_name = getattr(server, "name", name)
 
-            # 3. Safely release floating IP using the actual server name
+            # 3. Safely release the floating IP of the verified server object
             try:
-                self.release_floating_ip(server_name)
+                self.release_floating_ip(server_name, server=server)
             except Exception as fip_err:
                 logger.info(
                     f"Note: Could not release floating IP for {server_name}: {fip_err}"
@@ -1495,11 +1495,17 @@ class Provider(CloudBaseManager):
         )
         return True
 
-    def _get_floating_ip(self, name: str) -> str | None:
-        """Internal helper to retrieve the floating IP address of a VM."""
+    def _get_floating_ip(self, name: str, server=None) -> str | None:
+        """Internal helper to retrieve the floating IP address of a VM.
+
+        When ``server`` (a server object already validated against
+        ``list_servers()``) is provided, it is used directly and no
+        name-based lookup is performed.
+        """
         self._setup_chi_context()
         try:
-            server = chi.server.get_server(name)
+            if server is None:
+                server = chi.server.get_server(name)
             if not server:
                 return None
             addresses = getattr(server, "addresses", {})
@@ -1573,14 +1579,21 @@ class Provider(CloudBaseManager):
             logger.error(f"CHI assign_floating_ip failed for {name}: {e}")
             return None
 
-    def release_floating_ip(self, name: str) -> bool:
-        """Releases the floating IP associated with the VM."""
+    def release_floating_ip(self, name: str, server=None) -> bool:
+        """Releases the floating IP associated with the VM.
+
+        When ``server`` (a server object already validated against
+        ``list_servers()``) is provided, it is used directly for both the
+        lookup and the dissociation, so the floating IP of an unrelated VM
+        can never be released.
+        """
         self._setup_chi_context()
         try:
-            server = chi.server.get_server(name)
+            if server is None:
+                server = chi.server.get_server(name)
             if not server:
                 return False
-            fip = self._get_floating_ip(name)
+            fip = self._get_floating_ip(name, server=server)
             if fip:
                 server.detach_floating_ip(fip, delete=True)
                 return True

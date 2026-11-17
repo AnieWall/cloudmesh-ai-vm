@@ -199,7 +199,8 @@ def test_delete_exact_name_match(provider):
 
         assert result is True
         mock_chi.server.delete_server.assert_called_once_with(server_b.id)
-        mock_release.assert_called_once_with("vm-b")
+        # FIP cleanup must be handed the verified server object.
+        mock_release.assert_called_once_with("vm-b", server=server_b)
 
 
 def test_delete_by_exact_id(provider):
@@ -215,29 +216,40 @@ def test_delete_by_exact_id(provider):
 
         assert result is True
         mock_chi.server.delete_server.assert_called_once_with(server_b.id)
-        mock_release.assert_called_once_with("vm-b")
+        mock_release.assert_called_once_with("vm-b", server=server_b)
 
 
-def test_delete_nonexistent_with_single_server_is_safe(provider):
+def test_delete_nonexistent_with_single_server_is_safe(provider, capsys):
     """Regression test for issue #123.
 
     When the requested VM does not exist and exactly one unrelated server is
-    present, ``delete()`` must NOT select or delete that server and must not
-    release its floating IP.
+    present, ``delete()`` must NOT select or delete that server, must not
+    release or dissociate any floating IP, and must not fall back to the
+    single active server.
     """
     with patch("cloudmesh.ai.vm.openstack.ChameleonManager.chi") as mock_chi:
+        # Precondition: exactly one unrelated VM exists.
         only_server = _fake_server(
             "production-vm", "33333333-cccc-4ccc-8ccc-cccccccccccc"
         )
         mock_chi.server.list_servers.return_value = [only_server]
         mock_chi.server.get_server.side_effect = Exception("not found")
+        listed = mock_chi.server.list_servers()
+        assert listed == [only_server]
+        assert only_server.name == "production-vm"
 
         with patch.object(provider, "release_floating_ip") as mock_release:
             result = provider.delete("nonexistent-vm")
 
         assert result is False
+        # The unrelated VM must never be deleted.
         mock_chi.server.delete_server.assert_not_called()
+        # No floating-IP release or dissociation may happen.
         mock_release.assert_not_called()
+        # The original single-server fallback message must never be printed.
+        captured = capsys.readouterr()
+        assert "Targeting:" not in captured.out
+        assert "did not match directly" not in captured.out
 
 
 def test_delete_ambiguous_prefix_rejected(provider):
@@ -269,7 +281,7 @@ def test_delete_unique_uuid_prefix(provider):
 
         assert result is True
         mock_chi.server.delete_server.assert_called_once_with(server_a.id)
-        mock_release.assert_called_once_with("vm-a")
+        mock_release.assert_called_once_with("vm-a", server=server_a)
 
 
 def test_delete_api_failure_raises_vm_provider_error(provider):
@@ -304,7 +316,7 @@ def test_delete_get_server_mismatch_is_never_deleted(provider):
         # The unrelated VM returned by get_server() must never be deleted;
         # only the validated target is.
         mock_chi.server.delete_server.assert_called_once_with(target.id)
-        mock_release.assert_called_once_with("vm-a")
+        mock_release.assert_called_once_with("vm-a", server=target)
 
 
 def test_delete_duplicate_exact_name_rejected(provider):
@@ -359,7 +371,9 @@ def test_delete_get_server_conflicting_id_uses_list_entry(provider):
         assert result is True
         # The conflicting unlisted ID must never be deleted.
         mock_chi.server.delete_server.assert_called_once_with(list_entry.id)
-        mock_release.assert_called_once_with("vm-a")
+        # FIP cleanup must receive the verified list entry, not the stale
+        # object returned by get_server().
+        mock_release.assert_called_once_with("vm-a", server=list_entry)
 
 
 def test_delete_get_server_unlisted_prefix_vm_rejected(provider):
@@ -379,7 +393,7 @@ def test_delete_get_server_unlisted_prefix_vm_rejected(provider):
         assert result is True
         # Only the listed server is deleted; the unlisted one is untouched.
         mock_chi.server.delete_server.assert_called_once_with(listed.id)
-        mock_release.assert_called_once_with("vm-a")
+        mock_release.assert_called_once_with("vm-a", server=listed)
 
 
 def test_delete_conflicting_id_and_name_rejected(provider):
@@ -399,3 +413,53 @@ def test_delete_conflicting_id_and_name_rejected(provider):
         assert result is False
         mock_chi.server.delete_server.assert_not_called()
         mock_release.assert_not_called()
+
+
+def test_delete_releases_fip_only_of_verified_server(provider):
+    """FIP cleanup during delete must act only on the verified server object,
+    even when get_server() would resolve the name to a different VM.
+    """
+    with patch("cloudmesh.ai.vm.openstack.ChameleonManager.chi") as mock_chi:
+        target = _fake_server("vm-a", "11111111-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+        target.addresses = {
+            "ext-net": [
+                {"addr": "10.0.0.5", "OS-EXT-IPS:type": "fixed"},
+                {"addr": "129.97.1.100", "OS-EXT-IPS:type": "floating"},
+            ]
+        }
+        other = _fake_server("vm-a", "99999999-eeee-4eee-8eee-eeeeeeeeeeee")
+        other.addresses = {
+            "ext-net": [{"addr": "129.97.1.200", "OS-EXT-IPS:type": "floating"}]
+        }
+        mock_chi.server.list_servers.return_value = [target]
+        # get_server() would resolve the name to an unrelated, unlisted VM.
+        mock_chi.server.get_server.return_value = other
+
+        result = provider.delete("vm-a")
+
+        assert result is True
+        # Only the verified server's FIP is detached; the unrelated VM's FIP
+        # (129.97.1.200) must never be touched.
+        target.detach_floating_ip.assert_called_once_with(
+            "129.97.1.100", delete=True
+        )
+        other.detach_floating_ip.assert_not_called()
+        mock_chi.server.delete_server.assert_called_once_with(target.id)
+
+
+def test_release_floating_ip_with_verified_server_skips_name_lookup(provider):
+    """Passing the validated server object skips all name-based lookups."""
+    with patch("cloudmesh.ai.vm.openstack.ChameleonManager.chi") as mock_chi:
+        server = _fake_server("vm-a", "11111111-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+        server.addresses = {
+            "ext-net": [{"addr": "129.97.1.100", "OS-EXT-IPS:type": "floating"}]
+        }
+        mock_chi.server.get_server.side_effect = AssertionError(
+            "name-based lookup must not happen when a server object is given"
+        )
+
+        result = provider.release_floating_ip("vm-a", server=server)
+
+        assert result is True
+        mock_chi.server.get_server.assert_not_called()
+        server.detach_floating_ip.assert_called_once_with("129.97.1.100", delete=True)
