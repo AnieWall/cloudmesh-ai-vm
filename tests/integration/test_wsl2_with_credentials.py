@@ -18,7 +18,7 @@ def distro(provider):
     distributions = provider.list()
     if not distributions:
         pytest.skip("No WSL2 distributions are installed")
-    return distributions[0]["Name"]
+    return distributions[0]["name"]
 
 
 def test_wsl2_requirements_detect_real_cli(provider):
@@ -41,8 +41,7 @@ def test_wsl2_exists_real_and_missing_distribution(provider, distro):
 
 def test_wsl2_info_real_distribution(provider, distro):
     info = provider.info(distro)
-    assert "RawInfo" in info
-    assert distro in info["RawInfo"]
+    assert info["Name"] == distro
 
 
 def test_wsl2_version_real_cli(provider):
