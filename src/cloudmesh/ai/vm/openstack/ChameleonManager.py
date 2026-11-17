@@ -870,8 +870,74 @@ class Provider(CloudBaseManager):
             logger.error(f"CHI suspend failed for {name}: {e}")
             return False
 
+    @staticmethod
+    def _is_uuid_prefix_match(name: str, server_id: Any) -> bool:
+        """Returns True if ``name`` is a valid UUID prefix of ``server_id``.
+
+        A valid prefix consists of at least 8 hexadecimal characters
+        (case-insensitive) and matches the beginning of the server ID.
+        """
+        if len(name) < 8 or not all(c in "0123456789abcdef" for c in name.lower()):
+            return False
+        return str(server_id).lower().startswith(name.lower())
+
+    def _resolve_delete_target(self, name: str, servers: list) -> Any | None:
+        """Resolves the unique listed server that ``name`` safely identifies.
+
+        ``list_servers()`` is the authoritative source for deletion targets:
+        server objects returned by ``chi.server.get_server()`` are never used
+        directly, so stale or unlisted objects can never be deleted. The
+        requested identifier must match exactly one listed server -- by exact
+        ID, by unique exact name, or by an unambiguous UUID prefix. A
+        conflicting identifier (an exact ID of one server combined with an
+        exact name of a different server) is always rejected. Returns
+        ``None`` when nothing matches or the match is ambiguous.
+        """
+        exact_id = [s for s in servers if str(getattr(s, "id", "")) == name]
+        exact_name = [s for s in servers if getattr(s, "name", "") == name]
+
+        # Reject conflicting identifiers: an exact ID match on one server
+        # combined with an exact name match on a different server.
+        if exact_id and exact_name:
+            if (
+                len(exact_id) == 1
+                and len(exact_name) == 1
+                and exact_id[0] is exact_name[0]
+            ):
+                # The same server matched both ways: unambiguous.
+                return exact_id[0]
+            return None
+
+        if exact_id:
+            # A single exact ID match; duplicate IDs are ambiguous.
+            return exact_id[0] if len(exact_id) == 1 else None
+
+        if exact_name:
+            # A single exact name match; duplicate names are ambiguous.
+            return exact_name[0] if len(exact_name) == 1 else None
+
+        # Unambiguous UUID prefix: >= 8 hex characters, exactly one match.
+        prefix = [
+            s
+            for s in servers
+            if self._is_uuid_prefix_match(name, getattr(s, "id", ""))
+        ]
+        if len(prefix) == 1:
+            return prefix[0]
+        return None
+
     def delete(self, name: str | None = None) -> bool:
-        """Deletes a Chameleon VM by name, ID, or fallback to single active server."""
+        """Deletes a Chameleon VM by exact name, exact ID, or unambiguous UUID prefix.
+
+        ``list_servers()`` is the authoritative source for deletion targets:
+        the requested identifier must match exactly one listed server by
+        exact (unique) name, exact ID, or a UUID prefix of at least 8
+        hexadecimal characters. Objects returned by
+        ``chi.server.get_server()`` are never used as deletion targets, and
+        conflicting identifiers are rejected. If no server matches, or the
+        match is ambiguous, ``False`` is returned and no server or floating
+        IP is modified (see issue #123).
+        """
         if not name:
             return False
         # Mock mode: simulate successful deletion without contacting Chameleon.
@@ -885,58 +951,30 @@ class Provider(CloudBaseManager):
         print(f"Deleting Chameleon VM: {name}")
         self._setup_chi_context()
         try:
-            server = None
             servers = chi.server.list_servers()
 
-            # 1. Try direct lookup via get_server
-            try:
-                server = chi.server.get_server(name)
-            except Exception:
-                pass
-
-            # 2. Try matching name or ID from the list
-            if not server:
-                for s in servers:
-                    s_name = getattr(s, "name", "")
-                    s_id = str(getattr(s, "id", ""))
-                    print(f"Checking server: {s_name} ({s_id})")
-                    if (
-                        s_name == name
-                        or s_id == name
-                        or name in s_id
-                        or s_id.startswith(str(name))
-                    ):
-                        server = s
-                        break
-
-            # 3. Ultimate Fallback: If only ONE server exists in this project/site,
-            # assume this is the one the user meant to delete (handles internal UUID mismatch)
-            if not server and len(servers) == 1:
-                server = servers[0]
-                print(
-                    f"Notice: '{name}' did not match directly, but exactly one server was found. Targeting: {server.name}"
+            # list_servers() is the authoritative source for deletion targets;
+            # get_server() results are never accepted directly.
+            server = self._resolve_delete_target(name, servers)
+            if server is None:
+                logger.warning(
+                    f"CHI delete: Server '{name}' not found or match is ambiguous; "
+                    "no server was deleted."
                 )
-
-            if not server:
-                from cloudmesh.ai.vm.logger import logger
-
-                logger.warning(f"CHI delete: Server '{name}' not found.")
                 return False
 
             server_id = getattr(server, "id", None)
             server_name = getattr(server, "name", name)
 
-            # 4. Safely release floating IP using the actual server name
+            # 3. Safely release floating IP using the actual server name
             try:
                 self.release_floating_ip(server_name)
             except Exception as fip_err:
-                from cloudmesh.ai.vm.logger import logger
-
                 logger.info(
                     f"Note: Could not release floating IP for {server_name}: {fip_err}"
                 )
 
-            # 5. Delete the server using its reliable ID
+            # 4. Delete the server using its reliable ID
             if server_id:
                 chi.server.delete_server(server_id)
                 print(f"Successfully deleted server: {server_name} ({server_id})")
@@ -948,8 +986,6 @@ class Provider(CloudBaseManager):
 
             return False
         except Exception as e:
-            from cloudmesh.ai.vm.logger import logger
-
             logger.error(f"CHI delete failed for {name}: {e}")
             raise VMProviderError(f"CHI delete failed for {name}: {e}") from e
 

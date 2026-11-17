@@ -170,3 +170,232 @@ def test_start_compute_endpoint_missing(provider):
         # The raised error should contain a concise hint about the compute
         # endpoint configuration.
         assert "Compute service endpoint not found" in str(excinfo.value)
+
+
+def _fake_server(name: str, server_id: str):
+    """Build a minimal fake ``chi`` server object for ``delete()`` tests."""
+    s = MagicMock()
+    s.name = name
+    s.id = server_id
+    return s
+
+
+# ---------------------------------------------------------------------------
+# delete() matching and safety tests (regression guards for issue #123)
+# All tests run fully mocked: no Chameleon credentials or network access.
+# ---------------------------------------------------------------------------
+
+
+def test_delete_exact_name_match(provider):
+    """An exact name match deletes the right server and nothing else."""
+    with patch("cloudmesh.ai.vm.openstack.ChameleonManager.chi") as mock_chi:
+        server_a = _fake_server("vm-a", "11111111-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+        server_b = _fake_server("vm-b", "22222222-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+        mock_chi.server.list_servers.return_value = [server_a, server_b]
+        mock_chi.server.get_server.side_effect = Exception("not found by name")
+
+        with patch.object(provider, "release_floating_ip") as mock_release:
+            result = provider.delete("vm-b")
+
+        assert result is True
+        mock_chi.server.delete_server.assert_called_once_with(server_b.id)
+        mock_release.assert_called_once_with("vm-b")
+
+
+def test_delete_by_exact_id(provider):
+    """An exact server ID match deletes the right server."""
+    with patch("cloudmesh.ai.vm.openstack.ChameleonManager.chi") as mock_chi:
+        server_a = _fake_server("vm-a", "11111111-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+        server_b = _fake_server("vm-b", "22222222-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+        mock_chi.server.list_servers.return_value = [server_a, server_b]
+        mock_chi.server.get_server.side_effect = Exception("not found")
+
+        with patch.object(provider, "release_floating_ip") as mock_release:
+            result = provider.delete(server_b.id)
+
+        assert result is True
+        mock_chi.server.delete_server.assert_called_once_with(server_b.id)
+        mock_release.assert_called_once_with("vm-b")
+
+
+def test_delete_nonexistent_with_single_server_is_safe(provider):
+    """Regression test for issue #123.
+
+    When the requested VM does not exist and exactly one unrelated server is
+    present, ``delete()`` must NOT select or delete that server and must not
+    release its floating IP.
+    """
+    with patch("cloudmesh.ai.vm.openstack.ChameleonManager.chi") as mock_chi:
+        only_server = _fake_server(
+            "production-vm", "33333333-cccc-4ccc-8ccc-cccccccccccc"
+        )
+        mock_chi.server.list_servers.return_value = [only_server]
+        mock_chi.server.get_server.side_effect = Exception("not found")
+
+        with patch.object(provider, "release_floating_ip") as mock_release:
+            result = provider.delete("nonexistent-vm")
+
+        assert result is False
+        mock_chi.server.delete_server.assert_not_called()
+        mock_release.assert_not_called()
+
+
+def test_delete_ambiguous_prefix_rejected(provider):
+    """A prefix matching more than one server must not trigger any deletion."""
+    with patch("cloudmesh.ai.vm.openstack.ChameleonManager.chi") as mock_chi:
+        server_a = _fake_server("vm-a", "abcd1234-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+        server_b = _fake_server("vm-b", "abcd1234-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+        mock_chi.server.list_servers.return_value = [server_a, server_b]
+        mock_chi.server.get_server.side_effect = Exception("not found")
+
+        with patch.object(provider, "release_floating_ip") as mock_release:
+            result = provider.delete("abcd1234")
+
+        assert result is False
+        mock_chi.server.delete_server.assert_not_called()
+        mock_release.assert_not_called()
+
+
+def test_delete_unique_uuid_prefix(provider):
+    """An unambiguous ID prefix (>= 8 chars, exactly one match) deletes that server."""
+    with patch("cloudmesh.ai.vm.openstack.ChameleonManager.chi") as mock_chi:
+        server_a = _fake_server("vm-a", "11111111-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+        server_b = _fake_server("vm-b", "22222222-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+        mock_chi.server.list_servers.return_value = [server_a, server_b]
+        mock_chi.server.get_server.side_effect = Exception("not found")
+
+        with patch.object(provider, "release_floating_ip") as mock_release:
+            result = provider.delete("11111111")
+
+        assert result is True
+        mock_chi.server.delete_server.assert_called_once_with(server_a.id)
+        mock_release.assert_called_once_with("vm-a")
+
+
+def test_delete_api_failure_raises_vm_provider_error(provider):
+    """A chi API failure during deletion surfaces as a VMProviderError."""
+    with patch("cloudmesh.ai.vm.openstack.ChameleonManager.chi") as mock_chi:
+        server_a = _fake_server("vm-a", "11111111-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+        mock_chi.server.list_servers.return_value = [server_a]
+        mock_chi.server.get_server.side_effect = Exception("not found")
+        mock_chi.server.delete_server.side_effect = RuntimeError("chi API down")
+
+        with patch.object(provider, "release_floating_ip"), pytest.raises(
+            VMProviderError, match="CHI delete failed"
+        ):
+            provider.delete("vm-a")
+
+
+def test_delete_get_server_mismatch_is_never_deleted(provider):
+    """A server returned by get_server() that does not match the requested
+    identifier must be ignored and can never be deleted.
+    """
+    with patch("cloudmesh.ai.vm.openstack.ChameleonManager.chi") as mock_chi:
+        target = _fake_server("vm-a", "11111111-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+        unrelated = _fake_server("other-vm", "99999999-eeee-4eee-8eee-eeeeeeeeeeee")
+        mock_chi.server.list_servers.return_value = [target, unrelated]
+        # get_server() erroneously returns an unrelated VM.
+        mock_chi.server.get_server.return_value = unrelated
+
+        with patch.object(provider, "release_floating_ip") as mock_release:
+            result = provider.delete("vm-a")
+
+        assert result is True
+        # The unrelated VM returned by get_server() must never be deleted;
+        # only the validated target is.
+        mock_chi.server.delete_server.assert_called_once_with(target.id)
+        mock_release.assert_called_once_with("vm-a")
+
+
+def test_delete_duplicate_exact_name_rejected(provider):
+    """Two servers sharing the requested exact name are ambiguous: none is deleted."""
+    with patch("cloudmesh.ai.vm.openstack.ChameleonManager.chi") as mock_chi:
+        server_a = _fake_server("vm-dup", "11111111-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+        server_b = _fake_server("vm-dup", "22222222-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+        mock_chi.server.list_servers.return_value = [server_a, server_b]
+        mock_chi.server.get_server.side_effect = Exception("ambiguous")
+
+        with patch.object(provider, "release_floating_ip") as mock_release:
+            result = provider.delete("vm-dup")
+
+        assert result is False
+        mock_chi.server.delete_server.assert_not_called()
+        mock_release.assert_not_called()
+
+
+def test_delete_invalid_uuid_prefix_rejected(provider):
+    """UUID-prefix matching requires at least 8 hexadecimal characters."""
+    with patch("cloudmesh.ai.vm.openstack.ChameleonManager.chi") as mock_chi:
+        # Non-standard (non-UUID) ID used to exercise the hexadecimal rule.
+        server_x = _fake_server("vm-x", "ghij1234-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+        server_a = _fake_server("vm-a", "abcd1234-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+        mock_chi.server.list_servers.return_value = [server_x, server_a]
+        mock_chi.server.get_server.side_effect = Exception("not found")
+
+        with patch.object(provider, "release_floating_ip") as mock_release:
+            # Eight characters, but not hexadecimal -> not a valid prefix.
+            assert provider.delete("ghij1234") is False
+            # Hexadecimal, but shorter than eight characters -> not a prefix.
+            assert provider.delete("abcd12") is False
+
+        mock_chi.server.delete_server.assert_not_called()
+        mock_release.assert_not_called()
+
+
+def test_delete_get_server_conflicting_id_uses_list_entry(provider):
+    """A get_server() result with the requested name but a different ID than
+    the list_servers() entry is ignored; the list entry is the target.
+    """
+    with patch("cloudmesh.ai.vm.openstack.ChameleonManager.chi") as mock_chi:
+        list_entry = _fake_server("vm-a", "11111111-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+        stale = _fake_server("vm-a", "99999999-eeee-4eee-8eee-eeeeeeeeeeee")
+        mock_chi.server.list_servers.return_value = [list_entry]
+        # get_server() returns a stale object: same name, different ID.
+        mock_chi.server.get_server.return_value = stale
+
+        with patch.object(provider, "release_floating_ip") as mock_release:
+            result = provider.delete("vm-a")
+
+        assert result is True
+        # The conflicting unlisted ID must never be deleted.
+        mock_chi.server.delete_server.assert_called_once_with(list_entry.id)
+        mock_release.assert_called_once_with("vm-a")
+
+
+def test_delete_get_server_unlisted_prefix_vm_rejected(provider):
+    """An unlisted VM returned by get_server() that matches the requested
+    UUID prefix is ignored; only the listed server may be deleted.
+    """
+    with patch("cloudmesh.ai.vm.openstack.ChameleonManager.chi") as mock_chi:
+        listed = _fake_server("vm-a", "11111111-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+        unlisted = _fake_server("ghost-vm", "11111111-ffff-4fff-8fff-ffffffffffff")
+        mock_chi.server.list_servers.return_value = [listed]
+        # get_server() returns a VM that is not part of list_servers().
+        mock_chi.server.get_server.return_value = unlisted
+
+        with patch.object(provider, "release_floating_ip") as mock_release:
+            result = provider.delete("11111111")
+
+        assert result is True
+        # Only the listed server is deleted; the unlisted one is untouched.
+        mock_chi.server.delete_server.assert_called_once_with(listed.id)
+        mock_release.assert_called_once_with("vm-a")
+
+
+def test_delete_conflicting_id_and_name_rejected(provider):
+    """An identifier that is the exact ID of one server and the exact name of
+    a different server is conflicting: nothing may be deleted.
+    """
+    with patch("cloudmesh.ai.vm.openstack.ChameleonManager.chi") as mock_chi:
+        by_id = _fake_server("other-vm", "abc123")
+        by_name = _fake_server("abc123", "22222222-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+        mock_chi.server.list_servers.return_value = [by_id, by_name]
+        # Even if get_server() returns the ID match, the conflict must block.
+        mock_chi.server.get_server.return_value = by_id
+
+        with patch.object(provider, "release_floating_ip") as mock_release:
+            result = provider.delete("abc123")
+
+        assert result is False
+        mock_chi.server.delete_server.assert_not_called()
+        mock_release.assert_not_called()
