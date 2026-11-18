@@ -1,15 +1,11 @@
-import pytest
-
-
-def test_aws_lifecycle(get_provider):
+def test_aws_lifecycle(aws_live_provider):
     """
-    Full lifecycle test for AWS: Start -> Info -> Stop -> Delete.
-    Skips if AWS credentials are not configured.
+    Run the AWS Start -> Info -> Stop -> Delete lifecycle.
+
+    Requires CLOUDMESH_AWS_LIVE_TEST=1 and an explicitly configured
+    CLOUDMESH_VM_CONFIG file containing AWS credentials and VM settings.
     """
-    try:
-        provider = get_provider("aws")
-    except Exception as e:
-        pytest.skip(f"AWS credentials not configured or provider error: {e}")
+    provider = aws_live_provider
 
     vm_name = "integration-test-aws-vm"
 
