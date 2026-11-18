@@ -153,3 +153,28 @@ def test_getters(provider):
     sgs = provider.get_security_groups()
     assert len(sgs) == 1
     assert sgs[0]["name"] == "default"
+
+
+def test_restart_stopped_vm(provider):
+    """Restarting an already-stopped VM should start it directly."""
+
+    def side_effect(command, **kwargs):
+        if command == ["limactl", "list"]:
+            return MagicMock(
+                returncode=0,
+                stdout="NAME STATUS IMAGE\ntest-vm Stopped ubuntu\n",
+            )
+        if command == ["limactl", "stop", "test-vm"]:
+            raise RuntimeError("VM is already stopped")
+        if command == ["limactl", "start", "test-vm"]:
+            return MagicMock(returncode=0, stdout="Started")
+        raise AssertionError(f"Unexpected command: {command}")
+
+    provider._run_command.side_effect = side_effect
+
+    assert provider.restart(name="test-vm") is True
+    provider._run_command.assert_any_call(["limactl", "start", "test-vm"])
+    assert not any(
+        call.args[0] == ["limactl", "stop", "test-vm"]
+        for call in provider._run_command.call_args_list
+    )
