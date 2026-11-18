@@ -452,37 +452,21 @@ class Provider(LocalBaseManager):
         return False
 
     def info(self, name: str | None = None, kind: str = "vm") -> dict[str, Any]:
-        """Gets detailed information about a specific Lima VM.
-
-        The method attempts to retrieve detailed VM information via ``limactl info``.
-        If that command is unavailable or fails, it falls back to using the data
-        from ``self.list()`` to provide a minimal representation.
-        """
-        # NOTE: The ``kind`` argument is part of the abstract base‑class API but is
-        # not used by the Lima implementation. It is kept for signature
-        # compatibility with other providers.
+        """Retrieve Lima VM information using the supported list command."""
+        # The kind argument is retained for compatibility with the provider API.
         vm_name = name or self._get_default_vm(self.cloud_name)
         if not vm_name:
             raise VMResourceError("No VM name provided and no default VM found.")
-        if not self.exists(vm_name):
-            raise VMResourceError(f"VM {vm_name} not found.")
-        # Try the native info command first.
-        try:
-            result = self._run_command(["limactl", "info", vm_name], stream=False)
-            if result.stdout:
-                return {"Name": vm_name, "RawInfo": result.stdout.strip()}
-        except Exception:
-            # If the command is not supported or fails, ignore and fallback.
-            pass
-        # Fallback: locate the VM in the list output. ``self.list()`` may return
-        # ``None`` when Lima reports that no instance exists; treat that as an
-        # empty list.
+
         vms = self.list() or []
         for vm in vms:
-            if isinstance(vm, dict) and vm.get("name") == vm_name:
+            if (
+                isinstance(vm, dict)
+                and str(vm.get("name", "")).lower() == vm_name.lower()
+            ):
                 return {"Name": vm_name, "RawInfo": vm}
-        # If still not found (should not happen), raise an error.
-        raise VMProviderError(f"Unable to retrieve info for Lima VM {vm_name}")
+
+        raise VMResourceError(f"VM {vm_name} not found.")
 
 # Compatibility alias for matrix tests and external imports.
 LimaManager = Provider

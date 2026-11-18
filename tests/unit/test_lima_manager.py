@@ -153,3 +153,25 @@ def test_getters(provider):
     sgs = provider.get_security_groups()
     assert len(sgs) == 1
     assert sgs[0]["name"] == "default"
+
+
+def test_info_uses_list_without_unsupported_command(provider):
+    """VM info must use the supported Lima list command."""
+    provider._run_command.return_value = MagicMock(
+        returncode=0,
+        stdout="NAME STATUS IMAGE\ntest-vm Running ubuntu\n",
+    )
+
+    result = provider.info(name="test-vm")
+
+    assert result == {
+        "Name": "test-vm",
+        "RawInfo": {
+            "name": "test-vm",
+            "status": "Running",
+            "image": "ubuntu",
+        },
+    }
+    provider._run_command.assert_called_once_with(
+        ["limactl", "list"], stream=False
+    )
