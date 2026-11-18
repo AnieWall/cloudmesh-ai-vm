@@ -78,6 +78,18 @@ class TestLibcloudProviders:
         )
         assert provider.cloud_name == "aws"
 
+    @patch("cloudmesh.ai.vm.aws.AwsManager.get_driver")
+    def test_aws_factory_initialization(self, mock_get_driver):
+        from cloudmesh.ai.vm.factory import ProviderFactory
+
+        mock_get_driver.return_value = MagicMock(return_value=MagicMock())
+        with patch.dict(ProviderFactory._registry, {"aws": AwsProvider}):
+            provider = ProviderFactory.create("aws", MOCK_CONFIG)
+
+        assert isinstance(provider, AwsProvider)
+        assert provider.cloud_name == "aws"
+        mock_get_driver.assert_called_once()
+
     @patch("cloudmesh.ai.vm.azure.AzureManager.AzureDriver")
     def test_azure_init(self, mock_driver_class):
         mock_driver_class.return_value = MagicMock()

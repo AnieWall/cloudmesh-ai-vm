@@ -17,7 +17,8 @@ class Provider(LibcloudManager):
     """
 
     def __init__(self, config, **kwargs):
-        super().__init__(config, cloud_name="aws", **kwargs)
+        cloud_name = kwargs.pop("cloud_name", "aws")
+        super().__init__(config, cloud_name=cloud_name, **kwargs)
 
     def _get_driver(self):
         cloud_config = self.get_cloud_config("aws")
