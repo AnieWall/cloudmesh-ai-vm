@@ -43,10 +43,10 @@ def aws_live_provider():
     import os
     from pathlib import Path
 
-    if os.environ.get("CLOUDMESH_AWS_LIVE_TEST") != "1":
+    if os.environ.get("OS_CLOUD") != "aws":
         pytest.skip(
             "Live AWS lifecycle test disabled; "
-            "set CLOUDMESH_AWS_LIVE_TEST=1 to enable it"
+            "set OS_CLOUD=aws to enable it"
         )
 
     config_path = os.environ.get("CLOUDMESH_VM_CONFIG")

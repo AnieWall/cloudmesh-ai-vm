@@ -18,9 +18,13 @@ spec.loader.exec_module(module)
 aws_live_provider = module.aws_live_provider.__wrapped__
 
 
-def test_aws_live_test_disabled(monkeypatch):
-    """Disabled live testing must skip before provider initialization."""
-    monkeypatch.delenv("CLOUDMESH_AWS_LIVE_TEST", raising=False)
+@pytest.mark.parametrize("cloud", [None, "chameleon", "lima"])
+def test_aws_live_test_disabled(monkeypatch, cloud):
+    """Only an explicit AWS cloud selection enables live testing."""
+    if cloud is None:
+        monkeypatch.delenv("OS_CLOUD", raising=False)
+    else:
+        monkeypatch.setenv("OS_CLOUD", cloud)
 
     with pytest.raises(
         pytest.skip.Exception,
@@ -31,7 +35,7 @@ def test_aws_live_test_disabled(monkeypatch):
 
 def test_aws_live_test_requires_explicit_config(monkeypatch):
     """Live testing requires an explicitly selected configuration file."""
-    monkeypatch.setenv("CLOUDMESH_AWS_LIVE_TEST", "1")
+    monkeypatch.setenv("OS_CLOUD", "aws")
     monkeypatch.delenv("CLOUDMESH_VM_CONFIG", raising=False)
 
     with pytest.raises(
@@ -55,7 +59,7 @@ def test_aws_initialization_error_is_not_skipped(
         "    flavor: t3.micro\n"
     )
 
-    monkeypatch.setenv("CLOUDMESH_AWS_LIVE_TEST", "1")
+    monkeypatch.setenv("OS_CLOUD", "aws")
     monkeypatch.setenv("CLOUDMESH_VM_CONFIG", str(config_file))
 
     from cloudmesh.ai.vm.aws.AwsManager import Provider
@@ -81,7 +85,7 @@ def test_aws_live_test_skips_incomplete_config(monkeypatch, tmp_path):
         "    region: us-east-1\n"
     )
 
-    monkeypatch.setenv("CLOUDMESH_AWS_LIVE_TEST", "1")
+    monkeypatch.setenv("OS_CLOUD", "aws")
     monkeypatch.setenv("CLOUDMESH_VM_CONFIG", str(config_file))
 
     with pytest.raises(
