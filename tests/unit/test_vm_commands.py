@@ -60,6 +60,7 @@ def test_vm_start_existing_running_lima(runner, mock_provider):
 
     assert result.exit_code != 0
     assert "already exists" in result.output
+    assert "provider 'lima'" in result.output
     mock_provider.start.assert_not_called()
 
 
@@ -94,6 +95,7 @@ def test_vm_start_existing_running_multipass(runner, mock_provider):
 
     assert result.exit_code != 0
     assert "already exists" in result.output
+    assert "provider 'multipass'" in result.output
     mock_provider.start.assert_not_called()
 
 
@@ -110,6 +112,7 @@ def test_vm_start_existing_stopped_other_provider(runner, mock_provider):
 
     assert result.exit_code != 0
     assert "already exists" in result.output
+    assert "provider 'aws'" in result.output
     mock_provider.start.assert_not_called()
 
 

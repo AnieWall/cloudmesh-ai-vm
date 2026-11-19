@@ -125,7 +125,7 @@ def start(
             )
             if not resume_stopped:
                 raise click.ClickException(
-                    f"VM [bold red]{vm_name}[/bold red] already exists. Please use a different name or 'stop' it first."
+                    f"VM '{vm_name}' already exists on provider '{provider.cloud_name}'."
                 )
 
     for vm_name in vms_to_start:
