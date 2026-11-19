@@ -102,8 +102,9 @@ def start(
     # Start the VMs
     started_vms = []
 
-    # Prevent duplicate creation. Explicitly named stopped Lima VMs may
-    # be resumed; automatically generated names must always be new.
+    # Prevent duplicate creation. Explicitly named stopped Lima or Multipass
+    # VMs may be resumed (their start() powers on an existing VM);
+    # automatically generated names must always be new.
     if vms_to_start:
         existing_vms = {
             vm["name"]: vm
@@ -115,14 +116,14 @@ def start(
             if existing_vm is None:
                 continue
 
-            resume_stopped_lima = (
-                provider.cloud_name.lower() == "lima"
+            resume_stopped = (
+                provider.cloud_name.lower() in ("lima", "multipass")
                 and bool(name)
                 and not count
                 and not vm_range
                 and str(existing_vm.get("status", "")).lower() == "stopped"
             )
-            if not resume_stopped_lima:
+            if not resume_stopped:
                 raise click.ClickException(
                     f"VM [bold red]{vm_name}[/bold red] already exists. Please use a different name or 'stop' it first."
                 )
