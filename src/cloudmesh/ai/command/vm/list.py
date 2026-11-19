@@ -53,6 +53,7 @@ def _render_vms(cloud_name, vms):
             table_title,
             ["Name", "Status", "IP", "Image", "Flavor", "TTL", "Networks"],
             rows,
+            no_wrap=["Name"],
         )
         return True
     return False
