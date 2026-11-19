@@ -638,16 +638,20 @@ class OpenstackManager(CloudBaseManager):
             servers = conn.compute.servers()
             results = []
             for s in servers:
-                # Try to find a floating IP for the server
-                fip = None
-                # In openstacksdk, addresses are in a dict. We look for 'floating'
-                addresses = getattr(s, "addresses", {})
-                if addresses and "floating" in addresses:
-                    fip = (
-                        addresses["floating"][0].get("addr")
-                        if addresses["floating"]
-                        else None
-                    )
+                # In openstacksdk, addresses are grouped by network name
+                # (e.g. "auto_allocated_network" on Jetstream). A floating IP
+                # is marked with "OS-EXT-IPS:type": "floating"; a network
+                # named "floating" is also accepted.
+                addresses = getattr(s, "addresses", {}) or {}
+                fip = next(
+                    (
+                        a.get("addr")
+                        for net, addrs in addresses.items()
+                        for a in addrs or []
+                        if a.get("OS-EXT-IPS:type") == "floating" or net == "floating"
+                    ),
+                    None,
+                )
 
                 results.append(
                     {
