@@ -102,12 +102,27 @@ def start(
     # Start the VMs
     started_vms = []
 
-    # Pre-check: Ensure requested VMs don't already exist
-    # (This is critical for single names or range expansions to avoid accidental restarts/errors)
+    # Prevent duplicate creation. Explicitly named stopped Lima VMs may
+    # be resumed; automatically generated names must always be new.
     if vms_to_start:
-        existing_vms = [vm["name"] for vm in provider.list()]
+        existing_vms = {
+            vm["name"]: vm
+            for vm in (provider.list() or [])
+            if isinstance(vm, dict) and vm.get("name")
+        }
         for vm_name in vms_to_start:
-            if vm_name in existing_vms:
+            existing_vm = existing_vms.get(vm_name)
+            if existing_vm is None:
+                continue
+
+            resume_stopped_lima = (
+                provider.cloud_name.lower() == "lima"
+                and bool(name)
+                and not count
+                and not vm_range
+                and str(existing_vm.get("status", "")).lower() == "stopped"
+            )
+            if not resume_stopped_lima:
                 raise click.ClickException(
                     f"VM [bold red]{vm_name}[/bold red] already exists. Please use a different name or 'stop' it first."
                 )
