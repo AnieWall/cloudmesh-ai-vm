@@ -4,6 +4,7 @@ import pytest
 from click.testing import CliRunner
 
 from cloudmesh.ai.command.vm import cmx
+from cloudmesh.ai.command.vm.start import _can_resume_existing_vm
 
 
 @pytest.fixture
@@ -16,6 +17,29 @@ def mock_provider():
     provider = MagicMock()
     provider.cloud_name = "mock-cloud"
     return provider
+
+
+@pytest.mark.parametrize(
+    ("provider", "vm", "name", "count", "vm_range", "expected"),
+    [
+        ("lima", {"status": "Stopped"}, "test-vm", None, None, True),
+        ("multipass", {"status": "Stopped"}, "test-vm", None, None, True),
+        ("LIMA", {"status": "STOPPED"}, "test-vm", None, None, True),
+        ("aws", {"status": "Stopped"}, "test-vm", None, None, False),
+        ("lima", {"status": "Running"}, "test-vm", None, None, False),
+        ("multipass", {"status": "Running"}, "test-vm", None, None, False),
+        ("lima", {"status": "Stopped"}, None, None, None, False),
+        ("multipass", {"status": "Stopped"}, None, 2, None, False),
+        ("lima", {"status": "Stopped"}, None, None, "1-2", False),
+        ("lima", {}, "test-vm", None, None, False),
+    ],
+)
+def test_can_resume_existing_vm(
+    provider, vm, name, count, vm_range, expected
+):
+    assert _can_resume_existing_vm(
+        provider, vm, name, count, vm_range
+    ) is expected
 
 
 def test_vm_start_success(runner, mock_provider):

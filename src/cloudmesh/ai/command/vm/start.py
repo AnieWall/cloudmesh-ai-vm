@@ -10,6 +10,24 @@ from cloudmesh.ai.command._shared.context import (
 from cloudmesh.ai.command._shared.exceptions import VMCommandError, handle_errors
 
 
+def _can_resume_existing_vm(
+    provider_name: str,
+    existing_vm: dict,
+    name: str | None,
+    count: int | None,
+    vm_range: str | None,
+) -> bool:
+    """Check whether an explicitly selected local VM can be resumed."""
+    if provider_name.lower() not in {"lima", "multipass"}:
+        return False
+
+    if not name or count or vm_range:
+        return False
+
+    status = str(existing_vm.get("status", "")).lower()
+    return status == "stopped"
+
+
 @click.command()
 @click.pass_context
 @click.argument("name", required=False)
@@ -116,14 +134,14 @@ def start(
             if existing_vm is None:
                 continue
 
-            resume_stopped = (
-                provider.cloud_name.lower() in ("lima", "multipass")
-                and bool(name)
-                and not count
-                and not vm_range
-                and str(existing_vm.get("status", "")).lower() == "stopped"
+            can_resume = _can_resume_existing_vm(
+                provider.cloud_name,
+                existing_vm,
+                name,
+                count,
+                vm_range,
             )
-            if not resume_stopped:
+            if not can_resume:
                 raise click.ClickException(
                     f"VM '{vm_name}' already exists on provider '{provider.cloud_name}'."
                 )
