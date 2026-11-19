@@ -59,6 +59,47 @@ class TestOpenstackDetailed:
         assert vms[0]["image"] == "img1"
         assert vms[0]["flavor"] == "flv1"
 
+    @pytest.mark.parametrize(
+        ("addresses", "expected_ip"),
+        [
+            # Real openstacksdk format on Jetstream: one network, the floating
+            # IP is marked by OS-EXT-IPS:type.
+            (
+                {
+                    "auto_allocated_network": [
+                        {"addr": "10.0.140.67", "OS-EXT-IPS:type": "fixed"},
+                        {"addr": "149.165.169.251", "OS-EXT-IPS:type": "floating"},
+                    ]
+                },
+                "149.165.169.251",
+            ),
+            # No floating IP attached.
+            (
+                {"auto_allocated_network": [{"addr": "10.0.140.67", "OS-EXT-IPS:type": "fixed"}]},
+                "No IP",
+            ),
+            # No addresses at all.
+            (None, "No IP"),
+        ],
+    )
+    def test_list_sdk_floating_ip_by_type(self, provider, addresses, expected_ip):
+        """list() finds the floating IP by its OS-EXT-IPS:type, not by network name."""
+        conn = MagicMock()
+        server = SimpleNamespace(
+            name="vm1",
+            id="id1",
+            status="ACTIVE",
+            addresses=addresses,
+            image=SimpleNamespace(name="img1"),
+            flavor=SimpleNamespace(name="flv1"),
+        )
+        conn.compute.servers.return_value = [server]
+
+        with patch.object(provider, "_get_sdk_conn", return_value=conn):
+            vms = provider.list()
+
+        assert vms[0]["ip"] == expected_ip
+
     def test_get_floating_ip_success(self, provider):
         """Verify _get_floating_ip correctly parses the 'addresses' output."""
         mock_output = "network: a=10.0.0.1,net-id=net1; floating: a=1.2.3.4,net-id=net2"
