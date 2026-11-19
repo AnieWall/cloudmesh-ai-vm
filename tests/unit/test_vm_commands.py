@@ -29,6 +29,56 @@ def test_vm_start_success(runner, mock_provider):
         assert "Successfully started VM test-vm" in result.output
 
 
+def test_vm_start_existing_stopped_lima(runner, mock_provider):
+    """Starting an existing stopped Lima VM should resume it."""
+    mock_provider.cloud_name = "lima"
+    mock_provider.list.return_value = [{"name": "test-vm", "status": "Stopped"}]
+    mock_provider.start.return_value = "test-vm"
+
+    with patch(
+        "cloudmesh.ai.command.vm.start.get_active_provider",
+        return_value=mock_provider,
+    ):
+        result = runner.invoke(cmx, ["vm", "start", "test-vm"])
+
+    assert result.exit_code == 0, result.output
+    mock_provider.start.assert_called_once_with(
+        name="test-vm", assign_ip=True, duration=None
+    )
+
+
+def test_vm_start_existing_running_lima(runner, mock_provider):
+    """A running Lima VM must not be started again."""
+    mock_provider.cloud_name = "lima"
+    mock_provider.list.return_value = [{"name": "test-vm", "status": "Running"}]
+
+    with patch(
+        "cloudmesh.ai.command.vm.start.get_active_provider",
+        return_value=mock_provider,
+    ):
+        result = runner.invoke(cmx, ["vm", "start", "test-vm"])
+
+    assert result.exit_code != 0
+    assert "already exists" in result.output
+    mock_provider.start.assert_not_called()
+
+
+def test_vm_start_existing_stopped_other_provider(runner, mock_provider):
+    """Other providers retain duplicate-instance protection."""
+    mock_provider.cloud_name = "aws"
+    mock_provider.list.return_value = [{"name": "test-vm", "status": "Stopped"}]
+
+    with patch(
+        "cloudmesh.ai.command.vm.start.get_active_provider",
+        return_value=mock_provider,
+    ):
+        result = runner.invoke(cmx, ["vm", "start", "test-vm"])
+
+    assert result.exit_code != 0
+    assert "already exists" in result.output
+    mock_provider.start.assert_not_called()
+
+
 def test_vm_start_failure(runner, mock_provider):
     """Test that 'cmx vm start' handles failure correctly via VMCommandError."""
     with patch(

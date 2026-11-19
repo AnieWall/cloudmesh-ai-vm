@@ -385,14 +385,26 @@ class Provider(LocalBaseManager):
             raise VMProviderError(f"Failed to login to Lima VM {vm_name}: {e}")
 
     def restart(self, name: str | None = None) -> bool:
-        """Restarts a Lima VM by stopping it and then starting it again."""
+        """Restart a running Lima VM or start one that is already stopped."""
         vm_name = name or self._get_default_vm(self.cloud_name)
         if not vm_name:
             raise VMResourceError("No VM name provided and no default VM found.")
-        if not self.exists(vm_name):
+
+        vms = self.list() or []
+        vm = next(
+            (
+                entry for entry in vms
+                if isinstance(entry, dict)
+                and str(entry.get("name", "")).lower() == vm_name.lower()
+            ),
+            None,
+        )
+        if vm is None:
             raise VMResourceError(f"VM {vm_name} not found.")
+
         try:
-            self._run_command(["limactl", "stop", vm_name])
+            if str(vm.get("status", "")).lower() != "stopped":
+                self._run_command(["limactl", "stop", vm_name])
             self._run_command(["limactl", "start", vm_name])
             return True
         except Exception as e:
