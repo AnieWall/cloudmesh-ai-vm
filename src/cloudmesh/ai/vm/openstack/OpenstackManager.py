@@ -12,6 +12,9 @@ from cloudmesh.ai.vm.exceptions import (
     VMProviderError,
     VMResourceError,
 )
+# Helper to resolve SSH key location and name in a unified way.
+from cloudmesh.ai.vm.key_utils import resolve_key_path
+from cloudmesh.ai.command._shared.exceptions import VMCommandError
 
 
 class OpenstackManager(CloudBaseManager):
@@ -237,11 +240,21 @@ class OpenstackManager(CloudBaseManager):
         image_name = image or cloud_config.get("image")
         flavor_name = flavor or cloud_config.get("flavor")
         security_group = cloud_config.get("security_group", "default")
-        key_name = cloud_config.get("key_name")
-        if not key_name:
-            # Default to the conventional SSH key location if not provided.
-            key_path = cloud_config.get("key_path", "~/.ssh/id_rsa.pub")
-            key_name = Path(key_path).name.replace(".pub", "")
+        # Resolve SSH key name (and path) using the shared helper. For backward
+        # compatibility we fall back to the historic default behaviour if the
+        # helper raises ``VMCommandError`` (e.g., when ``~/.ssh`` is missing or
+        # contains multiple keys). The original implementation simply derived a
+        # name from ``~/.ssh/id_rsa.pub`` without validating its existence.
+        try:
+            _, key_name = resolve_key_path(cloud_config)
+        except VMCommandError:
+            # Preserve legacy behaviour: use the explicit ``key_name`` if set,
+            # otherwise fall back to ``~/.ssh/id_rsa.pub`` (or the configured
+            # ``key_path``) and derive the name from the filename.
+            key_name = cloud_config.get("key_name")
+            if not key_name:
+                key_path = cloud_config.get("key_path", "~/.ssh/id_rsa.pub")
+                key_name = Path(key_path).name.replace(".pub", "")
         # ------------------------------------------------------------------
         # VM creation (with optional pre‑flight floating IP reservation)
         # ------------------------------------------------------------------

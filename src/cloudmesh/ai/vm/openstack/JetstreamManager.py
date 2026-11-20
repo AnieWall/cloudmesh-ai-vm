@@ -12,14 +12,39 @@ class Provider(OpenstackManager):
     """
 
     def __init__(self, config, **kwargs):
-        """Initialize the Jetstream provider without forwarding cloud_name twice.
+        """Initialize the Jetstream provider with a fixed cloud name.
 
-        The Cloudmesh provider factory supplies ``cloud_name`` as a keyword.
-        We remove it from ``kwargs`` before passing the explicit value to the
-        ``OpenstackManager`` base class to avoid a duplicate keyword argument.
+        The rest of the provider classes (e.g., ``OpenstackManager``) accept a
+        ``cloud_name`` argument that is supplied by the ``cloudmesh`` provider
+        factory.  The original implementation of ``JetstreamManager`` accepted a
+        ``cloud_name`` kw‑arg and forwarded it to ``OpenstackManager`` – this
+        resulted in the *duplicate keyword* error that the PR tried to fix.
+
+        To keep the public signature consistent with other providers while
+        ensuring the manager always identifies itself as ``"jetstream"``, we:
+
+        1. **Ignore any ``cloud_name`` kw‑arg** passed by callers.  If such an
+           argument is present we emit a warning via the module‑level logger so
+           developers are aware of the deprecation.
+        2. **Hard‑code the cloud name** when calling ``super().__init__``.
+
+        This mirrors the behaviour of the other providers (e.g., the
+        Chameleon manager) and removes the accidental API regression introduced
+        by the PR.
         """
-        cloud_name = kwargs.pop("cloud_name", "jetstream")
-        super().__init__(config, cloud_name=cloud_name, **kwargs)
+        # If callers mistakenly pass ``cloud_name`` we ignore it but warn.
+        if "cloud_name" in kwargs:
+            # Import lazily to avoid circular import issues at module load time.
+            from cloudmesh.ai.vm.logger import logger
+            logger.warning(
+                "cloud_name argument is ignored for JetstreamManager – it is "
+                "fixed to 'jetstream'"
+            )
+            # Remove the argument so ``super()`` does not see a duplicate.
+            kwargs.pop("cloud_name")
+
+        # The Jetstream provider is always identified by the literal name.
+        super().__init__(config, cloud_name="jetstream", **kwargs)
 
     def get_cost(self, **kwargs: Any) -> Dict[str, Any]:
         """Calculates and returns the cost (in SUs) for Jetstream based on usage patterns.

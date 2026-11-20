@@ -21,6 +21,7 @@ from contextlib import redirect_stdout
 from datetime import datetime, timedelta, timezone
 from io import StringIO
 from typing import Any
+from pathlib import Path
 
 # ``chi`` is imported lazily in ``_setup_chi_context`` to avoid heavy imports
 # during module load. It will be replaced by a ``MagicMock`` in the unit tests.
@@ -32,6 +33,9 @@ from keystoneauth1.exceptions.catalog import EndpointNotFound
 
 from cloudmesh.ai.vm.CloudBaseManager import CloudBaseManager
 from cloudmesh.ai.vm.exceptions import ConfigError, VMProviderError, VMResourceError, ProviderFeatureNotSupported
+# Helper to resolve SSH key location and name in a unified way.
+from cloudmesh.ai.vm.key_utils import resolve_key_path
+from cloudmesh.ai.command._shared.exceptions import VMCommandError
 from cloudmesh.ai.vm.logger import logger
 
 from .ChameleonAuthManager import authenticate_chi_from_cloud
@@ -552,16 +556,20 @@ class Provider(CloudBaseManager):
             self.print(f"VM {mock_name} started")
             return mock_name
 
-        # Ensure keypair exists and matches the local key
-        key_path = cloud_config.get("key_path", "~/.ssh/id_rsa.pub")
-        key_filename = os.path.expanduser(key_path)
-        # Determine the key name to use in the cloud. Prefer explicit config, fall back to filename.
-        key_name = cloud_config.get("key_name")
-        if not key_name:
-            # Derive a default name from the key file name (without .pub)
-            from pathlib import Path
-
-            key_name = Path(key_path).name.replace(".pub", "")
+        # Ensure keypair exists and matches the local key. Resolve both the path to the
+        # public key file and the corresponding key name using the shared helper. If
+        # resolution fails (e.g., the explicitly configured ``key_path`` does not
+        # exist in the test environment), fall back to the historic behaviour which
+        # simply expands ``key_path`` and derives the name from the filename.
+        try:
+            key_path, key_name = resolve_key_path(cloud_config)
+            key_filename = str(key_path)
+        except VMCommandError:
+            key_path = cloud_config.get("key_path", "~/.ssh/id_rsa.pub")
+            key_filename = os.path.expanduser(key_path)
+            key_name = cloud_config.get("key_name")
+            if not key_name:
+                key_name = Path(key_path).name.replace(".pub", "")
 
         # -----------------------------------------------------------------
         # Mock mode handling
