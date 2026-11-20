@@ -1,6 +1,12 @@
 from typing import Any
 
 from cloudmesh.ai.vm.LibcloudManager import LibcloudManager
+from cloudmesh.ai.vm.exceptions import (
+    ProviderFeatureNotSupported,
+    VMProviderError,
+    VMResourceError,
+)
+from cloudmesh.ai.vm.logger import logger
 
 try:
     from libcloud.compute.providers.gce import GCEDriver
@@ -17,7 +23,14 @@ class Provider(LibcloudManager):
     """
 
     def __init__(self, config, **kwargs):
-        super().__init__(config, cloud_name="google", **kwargs)
+        """Initialize the Google provider without forwarding cloud_name twice.
+
+        The Cloudmesh provider factory may supply ``cloud_name`` in ``kwargs``.
+        Remove it before passing the provider name to ``LibcloudManager`` to
+        avoid a duplicate keyword argument error.
+        """
+        cloud_name = kwargs.pop("cloud_name", "google")
+        super().__init__(config, cloud_name=cloud_name, **kwargs)
 
     def _get_driver(self):
         cloud_config = self.get_cloud_config("google")
