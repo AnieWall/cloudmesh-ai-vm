@@ -4,6 +4,7 @@ from cloudmesh.ai.command._shared.context import (
     console,
     get_active_provider,
     vm_options,
+    CONFIG_PATH,
 )
 from cloudmesh.ai.command._shared.exceptions import handle_errors
 from cloudmesh.ai.command._shared.ui import render_table
@@ -11,6 +12,9 @@ from cloudmesh.ai.command._shared.ui import render_table
 from cloudmesh.ai.vm.diagnostics.config_validator import run_all_config_checks
 # Import the specific exception used to signal optional features are not supported
 from cloudmesh.ai.vm.exceptions import ProviderFeatureNotSupported
+import json
+import os
+from pathlib import Path
 
 
 def _format_validation_result(result):
@@ -88,14 +92,21 @@ def _status_label(status):
     is_flag=True,
     help="Run exhaustive configuration validation (replicates smoke test).",
 )
+@click.option(
+    "--json",
+    "json_output",
+    is_flag=True,
+    help="Output the doctor result as a JSON document instead of a table.",
+)
 @click.pass_context
 @vm_options
 def doctor(
     ctx: click.Context,
     strict: bool = False,
     config: bool = False,
+    json_output: bool = False,
     **kwargs,
-) -> None:
+ ) -> None:
     """
     Diagnose the active VM provider without modifying any VM resources.
 
@@ -115,6 +126,41 @@ def doctor(
             "Provider",
             _status_label("PASS"),
             f"Resolved provider: {cloud_name}",
+        ]
+    )
+
+    # 1b. Configuration file existence check
+    if os.path.isfile(CONFIG_PATH):
+        details = f"Found configuration file: {CONFIG_PATH.strip()}".replace("\n", " ")
+        rows.append(
+            [
+                "Configuration File",
+                _status_label("PASS"),
+                details,
+            ]
+        )
+    else:
+        details = f"Configuration file not found: {CONFIG_PATH.strip()}".replace("\n", " ")
+        rows.append(
+            [
+                "Configuration File",
+                _status_label("FAIL"),
+                details,
+            ]
+        )
+        failures += 1
+
+    # 1c. Tool version information
+    try:
+        version_path = Path(__file__).parents[5] / "VERSION"
+        version = version_path.read_text().strip()
+    except Exception:
+        version = "unknown"
+    rows.append(
+        [
+            "Tool Version",
+            _status_label("PASS"),
+            version,
         ]
     )
 
@@ -286,9 +332,42 @@ def doctor(
                 elif status == "WARN":
                     warnings += 1
 
-    # Reorder rows to match expected order: Provider, Requirements, Configuration, Provider Info
-    desired_order = {"Provider": 0, "Requirements": 1, "Configuration": 2, "Provider Info": 3}
+    # Reorder rows to match expected order: Provider, Configuration File, Tool Version, Requirements, Configuration, Provider Info
+    desired_order = {
+        "Provider": 0,
+        "Configuration File": 1,
+        "Tool Version": 2,
+        "Requirements": 3,
+        "Configuration": 4,
+        "Provider Info": 5,
+    }
     rows.sort(key=lambda r: desired_order.get(r[0], 99))
+
+    # If JSON output requested, emit a JSON document and exit early.
+    if json_output:
+        # Build a simple serialisable structure. We keep the status string as‑is (it may contain Rich markup).
+        json_output = {
+            "cloud": cloud_name,
+            "failures": failures,
+            "warnings": warnings,
+            "checks": [
+                {
+                    "check": r[0],
+                    "status": r[1],
+                    # Ensure the details string does not contain raw newlines, which break JSON parsing.
+                    "details": r[2].replace("\n", " ").replace("\r", " ")
+                    if isinstance(r[2], str)
+                    else r[2],
+                }
+                for r in rows
+            ],
+        }
+        # Use a plain ``print`` to avoid Rich's automatic line‑wrapping, which would insert
+        # stray newlines into the JSON output and break ``json.loads``.
+        print(json.dumps(json_output, indent=2))
+        if strict and failures:
+            ctx.exit(1)
+        return
 
     render_table(
         f"VM Doctor: {cloud_name}",
