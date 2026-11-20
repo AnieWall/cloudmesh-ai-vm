@@ -423,6 +423,7 @@ class Provider(LocalBaseManager):
                     {
                         "name": item.get("name"),
                         "status": item.get("state"),
+                        "image": item.get("release") or "",
                         # Return None for missing or empty IPv4 entries
                          # Return empty string for missing IPv4 entries (to avoid literal "None")
                          "ip": item.get("ipv4")[0] if item.get("ipv4") else "",
