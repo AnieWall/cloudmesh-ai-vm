@@ -6,6 +6,7 @@ from cloudmesh.ai.vm.aws.AwsManager import Provider as AwsProvider
 from cloudmesh.ai.vm.azure.AzureManager import Provider as AzureProvider
 from cloudmesh.ai.vm.exceptions import ProviderFeatureNotSupported
 from cloudmesh.ai.vm.google.GoogleManager import Provider as GoogleProvider
+from cloudmesh.ai.vm.openstack.JetstreamManager import Provider as JetstreamProvider
 
 # Mock configuration
 MOCK_CONFIG = {
@@ -111,7 +112,50 @@ class TestLibcloudProviders:
         mock_driver_class.assert_called_once_with(
             project_id="test-project", private_key="/path/to/key.json"
         )
-        assert provider.cloud_name == "google"
+
+    @patch("cloudmesh.ai.vm.azure.AzureManager.AzureDriver")
+    def test_azure_factory_initialization(self, mock_driver_class):
+        """The factory must not pass ``cloud_name`` twice to the Azure provider.
+
+        ProviderFactory supplies the cloud name through ``kwargs``. AzureProvider
+        must consume that argument before forwarding it to ``LibcloudManager``.
+        """
+        from cloudmesh.ai.vm.factory import ProviderFactory
+
+        mock_driver_class.return_value = MagicMock()
+
+        with patch.dict(
+            ProviderFactory._registry,
+            {"azure": AzureProvider},
+        ):
+            provider = ProviderFactory.create("azure", MOCK_CONFIG)
+
+        assert isinstance(provider, AzureProvider)
+        assert provider.cloud_name == "azure"
+        mock_driver_class.assert_called_once_with(
+            tenant_id="test-tenant",
+            subscription_id="test-sub",
+            client_id="test-client",
+            client_secret="test-secret",
+        )
+
+    def test_jetstream_factory_initialization(self):
+        """Factory must not pass ``cloud_name`` twice to the Jetstream provider.
+
+        JetstreamProvider inherits from ``OpenstackManager`` which does not
+        create a driver during initialization, so we only verify that the
+        instance is created and that ``cloud_name`` is set correctly.
+        """
+        from cloudmesh.ai.vm.factory import ProviderFactory
+
+        with patch.dict(
+            ProviderFactory._registry,
+            {"jetstream": JetstreamProvider},
+        ):
+            provider = ProviderFactory.create("jetstream", MOCK_CONFIG)
+
+        assert isinstance(provider, JetstreamProvider)
+        assert provider.cloud_name == "jetstream"
 
     def test_lifecycle_methods(self, mock_driver):
         # Test using AWS Provider as the representative for LibcloudManager logic

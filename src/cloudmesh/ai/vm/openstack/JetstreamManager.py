@@ -12,7 +12,14 @@ class Provider(OpenstackManager):
     """
 
     def __init__(self, config, **kwargs):
-        super().__init__(config, cloud_name="jetstream", **kwargs)
+        """Initialize the Jetstream provider without forwarding cloud_name twice.
+
+        The Cloudmesh provider factory supplies ``cloud_name`` as a keyword.
+        We remove it from ``kwargs`` before passing the explicit value to the
+        ``OpenstackManager`` base class to avoid a duplicate keyword argument.
+        """
+        cloud_name = kwargs.pop("cloud_name", "jetstream")
+        super().__init__(config, cloud_name=cloud_name, **kwargs)
 
     def get_cost(self, **kwargs: Any) -> Dict[str, Any]:
         """Calculates and returns the cost (in SUs) for Jetstream based on usage patterns.
