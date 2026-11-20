@@ -50,14 +50,36 @@ def ssh(ctx: click.Context, name: str | None = None, **kwargs) -> None:
     if not ip:
         raise VMCommandError(f"Could not resolve IP address for VM {vm_name}.")
 
-    # Get SSH key path from config
+    # Resolve the SSH key to use for the connection.
+    # Historically the command expanded ``cloud_config["key_path"]`` directly, which
+    # could point to a public key (e.g. ``~/.ssh/id_ed25519.pub``).  Using a public
+    # key with ``ssh -i`` results in the ``bad permissions`` error described in the
+    # issue #131.  We now delegate path resolution to the shared helper
+    # ``resolve_key_path`` which returns the *public* key path and a derived key name.
+    # For SSH we need the *private* key, so we strip a trailing ``.pub`` if present.
     from cloudmesh.ai.command._shared.context import state
+    from cloudmesh.ai.vm.key_utils import resolve_key_path
+    from cloudmesh.ai.command._shared.exceptions import VMCommandError
 
     cloud_config = state.config.get_cloud_config(provider.cloud_name) or {}
-    key_path = cloud_config.get("key_path", "~/.ssh/id_rsa")
-    user = cloud_config.get("user", "ubuntu")
+    try:
+        # ``resolve_key_path`` returns a Path to the **public** key file.
+        pub_path, _ = resolve_key_path(cloud_config)
+        # Derive the private key path by removing the ``.pub`` suffix if it exists.
+        key_path = str(pub_path)
+        if key_path.endswith('.pub'):
+            key_path = key_path[:-4]
+    except VMCommandError:
+        # Fallback to the historic behaviour for environments where the helper
+        # cannot determine a key (e.g., missing ``~/.ssh``).  This mirrors the
+        # previous implementation and keeps backward compatibility.
+        key_path = cloud_config.get("key_path", "~/.ssh/id_rsa")
+        key_path = os.path.expanduser(key_path)
+        # If the fallback path points to a public key, strip ``.pub`` as a best‑effort.
+        if key_path.endswith('.pub'):
+            key_path = key_path[:-4]
 
-    key_path = os.path.expanduser(key_path)
+    user = cloud_config.get("user", "ubuntu")
 
     # Build the SSH command
     # -t forces pseudo-terminal allocation which is needed for interactive shells

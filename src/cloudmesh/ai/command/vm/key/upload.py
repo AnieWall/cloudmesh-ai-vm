@@ -12,6 +12,7 @@ as intended.
 
 import glob
 import os
+from pathlib import Path
 
 import click
 
@@ -34,23 +35,39 @@ def upload_key(ctx: click.Context, key_path: str = None, name: str = None):
     provider = get_active_provider(ctx)
     config = provider.get_cloud_config(provider.cloud_name) or {}
 
-    # Resolve key_path
-    if not key_path:
-        # 1. Try config
-        key_path = config.get("key_path")
+    # Resolve the SSH public key path and the key name.
+    # If the user supplied a ``key_path`` argument we honour it (expanding ``~``).
+    # Otherwise we delegate to the shared ``resolve_key_path`` helper which
+    # implements the unified logic described in issue #131.  When the helper
+    # cannot resolve a key (e.g., missing ``~/.ssh``), we fall back to the legacy
+    # discovery mechanism to preserve backward compatibility.
+    from cloudmesh.ai.vm.key_utils import resolve_key_path
+    from cloudmesh.ai.command._shared.exceptions import VMCommandError
 
-        if not key_path:
-            # 2. Try default fallbacks in ~/.ssh/
+    if key_path:
+        # User supplied an explicit path – just expand it.
+        key_path = os.path.expanduser(key_path)
+        # Derive a name from the filename when not explicitly provided.
+        if not name:
+            name = Path(key_path).stem
+    else:
+        # No explicit argument – try the global helper first.
+        try:
+            pub_path, derived_name = resolve_key_path(config)
+            key_path = str(pub_path)
+            if not name:
+                name = derived_name
+        except VMCommandError:
+            # Legacy fallback: search ``~/.ssh`` for a suitable public key.
             ssh_dir = os.path.expanduser("~/.ssh")
+            # Prefer common defaults.
             fallbacks = ["id_ed25519.pub", "id_rsa.pub"]
             for fb in fallbacks:
-                path = os.path.join(ssh_dir, fb)
-                if os.path.exists(path):
-                    key_path = path
+                candidate = os.path.join(ssh_dir, fb)
+                if os.path.exists(candidate):
+                    key_path = candidate
                     break
-
             if not key_path:
-                # 3. Try any *.pub file
                 pub_files = glob.glob(os.path.join(ssh_dir, "*.pub"))
                 if len(pub_files) == 1:
                     key_path = pub_files[0]
@@ -64,10 +81,11 @@ def upload_key(ctx: click.Context, key_path: str = None, name: str = None):
                     raise VMCommandError(
                         f"No public keys found in {ssh_dir}. Please provide a key_path."
                     )
+            # Derive a name from the discovered key if not provided.
+            if not name:
+                name = Path(key_path).stem
 
-    key_path = os.path.expanduser(key_path)
-
-    # Resolve name
+    # Resolve name (if still not set) from configuration as a final fallback.
     if not name:
         name = config.get("key_name")
 
