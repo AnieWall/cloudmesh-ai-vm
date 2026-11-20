@@ -10,6 +10,24 @@ from cloudmesh.ai.command._shared.context import (
 from cloudmesh.ai.command._shared.exceptions import VMCommandError, handle_errors
 
 
+def _can_resume_existing_vm(
+    provider_name: str,
+    existing_vm: dict,
+    name: str | None,
+    count: int | None,
+    vm_range: str | None,
+) -> bool:
+    """Check whether an explicitly selected local VM can be resumed."""
+    if provider_name.lower() not in {"lima", "multipass"}:
+        return False
+
+    if not name or count or vm_range:
+        return False
+
+    status = str(existing_vm.get("status", "")).lower()
+    return status == "stopped"
+
+
 @click.command()
 @click.pass_context
 @click.argument("name", required=False)
@@ -102,14 +120,30 @@ def start(
     # Start the VMs
     started_vms = []
 
-    # Pre-check: Ensure requested VMs don't already exist
-    # (This is critical for single names or range expansions to avoid accidental restarts/errors)
+    # Prevent duplicate creation. Explicitly named stopped Lima or Multipass
+    # VMs may be resumed (their start() powers on an existing VM);
+    # automatically generated names must always be new.
     if vms_to_start:
-        existing_vms = [vm["name"] for vm in provider.list()]
+        existing_vms = {
+            vm["name"]: vm
+            for vm in (provider.list() or [])
+            if isinstance(vm, dict) and vm.get("name")
+        }
         for vm_name in vms_to_start:
-            if vm_name in existing_vms:
+            existing_vm = existing_vms.get(vm_name)
+            if existing_vm is None:
+                continue
+
+            can_resume = _can_resume_existing_vm(
+                provider.cloud_name,
+                existing_vm,
+                name,
+                count,
+                vm_range,
+            )
+            if not can_resume:
                 raise click.ClickException(
-                    f"VM [bold red]{vm_name}[/bold red] already exists. Please use a different name or 'stop' it first."
+                    f"VM '{vm_name}' already exists on provider '{provider.cloud_name}'."
                 )
 
     for vm_name in vms_to_start:

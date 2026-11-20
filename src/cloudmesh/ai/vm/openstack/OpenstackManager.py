@@ -228,6 +228,7 @@ class OpenstackManager(CloudBaseManager):
             release_fip,
         )
         from cloudmesh.ai.vm.logger import logger
+        from unittest.mock import MagicMock
 
         assign_ip = kwargs.get("assign_ip", True)
 
@@ -246,7 +247,9 @@ class OpenstackManager(CloudBaseManager):
         # VM creation (with optional pre‑flight floating IP reservation)
         # ------------------------------------------------------------------
         allocated_fip = None
+        owns_allocated_fip = False
         conn = None
+        server = None
         try:
             # ------------------------------------------------------------------
             # Compatibility shim: if a legacy ``driver`` attribute is present (as used
@@ -267,8 +270,6 @@ class OpenstackManager(CloudBaseManager):
                 # exact name. This avoids requiring the test to manually assign the
                 # driver to the manager instance.
                 import inspect
-                from unittest.mock import MagicMock
-
                 mock_driver = None
                 frame = inspect.currentframe()
                 while frame is not None:
@@ -304,6 +305,7 @@ class OpenstackManager(CloudBaseManager):
                         logger.debug("Reusing existing unassigned floating IP.")
                     else:
                         allocated_fip = allocate_fip_with_retry(conn)
+                        owns_allocated_fip = True
                         logger.debug("Allocated new floating IP via retry logic.")
                 except Exception as e:
                     # In test environments (e.g., mock drivers) the floating IP
@@ -379,6 +381,16 @@ class OpenstackManager(CloudBaseManager):
                         # Find the server ports
                         ports = list(conn.network.ports(device_id=server.id))
                         if not ports:
+                            # No attachment was attempted. Release only an IP
+                            # allocated by this operation; preserve the VM.
+                            if owns_allocated_fip:
+                                try:
+                                    release_fip(conn, allocated_fip)
+                                except Exception:
+                                    logger.exception(
+                                        "Failed to release unused floating IP for VM %s",
+                                        vm_name,
+                                    )
                             raise VMProviderError(
                                 f"No ports found for VM {vm_name}. Cannot assign floating IP."
                             )
@@ -415,11 +427,6 @@ class OpenstackManager(CloudBaseManager):
                         logger.error(
                             f"Failed to assign floating IP to VM {vm_name}: {attach_err}"
                         )
-                        # Cleanup allocated floating IP on failure
-                        try:
-                            release_fip(conn, allocated_fip)
-                        except Exception:
-                            pass
                         raise VMProviderError(
                             f"Failed to assign floating IP to VM {vm_name}: {attach_err}"
                         ) from attach_err
@@ -451,7 +458,12 @@ class OpenstackManager(CloudBaseManager):
                 f"SDK start failed for {self.cloud_name} with key_name '{key_name}': {e}"
             )
             # Cleanup any pre‑flight floating IP reservation if the VM creation failed
-            if assign_ip and allocated_fip:
+            if (
+                server is None
+                and assign_ip
+                and owns_allocated_fip
+                and allocated_fip
+            ):
                 try:
                     release_fip(conn, allocated_fip)
                 except Exception:
@@ -571,8 +583,13 @@ class OpenstackManager(CloudBaseManager):
         except Exception as e:
             from cloudmesh.ai.vm.logger import logger
 
-            logger.error(f"SDK stop failed for {name}: {e}")
-            raise VMProviderError(f"SDK stop failed for {name}: {e}") from e
+            from cloudmesh.ai.command.vm._shared.providers_utils import sanitize_output
+
+            diagnostic = sanitize_output(str(e))
+            logger.error("SDK stop failed for %s: %s", name, diagnostic)
+            raise VMProviderError(
+                f"SDK stop failed for {name}: {diagnostic}"
+            ) from None
 
     def shelve(self, name: str | None = None) -> bool:
         """Shelves an OpenStack VM (preserves disk, releases compute resources)."""
@@ -616,20 +633,66 @@ class OpenstackManager(CloudBaseManager):
             logger.error(f"VM {name} not found in {self.cloud_name}")
             return False
         try:
-            # Release floating IP before deleting the VM
-            self.release_floating_ip(name)
-
             conn = self._get_sdk_conn()
             server = self._find_node(name)
             if server:
+                # Identify and verify the floating IP before deletion.
+                # Never release an IP associated with another server.
+                floating_ip = None
+                public_ips = getattr(server, "public_ips", []) or []
+                for address in public_ips:
+                    candidate = conn.network.find_floating_ip(address)
+                    if candidate is None:
+                        continue
+
+                    port_id = getattr(candidate, "port_id", None)
+                    if not isinstance(port_id, str) or not port_id:
+                        continue
+
+                    port = conn.network.get_port(port_id)
+                    if (
+                        port is not None
+                        and str(getattr(port, "device_id", "")) == str(server.id)
+                    ):
+                        floating_ip = candidate
+                        break
+
                 conn.compute.delete_server(server)
+                # Preserve the IP if deletion fails or times out.
+                conn.compute.wait_for_delete(
+                    server, interval=2, wait=120
+                )
+
+                if floating_ip:
+                    try:
+                        conn.network.delete_floating_ip(floating_ip)
+                    except Exception:
+                        from cloudmesh.ai.vm.logger import logger
+
+                        logger.error(
+                            "VM deleted successfully, but floating IP cleanup "
+                            "failed for %s",
+                            name,
+                        )
+                        raise VMProviderError(
+                            f"VM deleted successfully, but floating IP cleanup "
+                            f"failed for {name}"
+                        ) from None
+
                 return True
             return False
+        except VMProviderError:
+            raise
         except Exception as e:
             from cloudmesh.ai.vm.logger import logger
 
-            logger.error(f"SDK delete failed for {name}: {e}")
-            raise VMProviderError(f"SDK delete failed for {name}: {e}") from e
+            from cloudmesh.ai.command.vm._shared.providers_utils import sanitize_output
+
+            diagnostic = sanitize_output(str(e))
+            logger.error("SDK delete failed for %s: %s", name, diagnostic)
+            raise VMProviderError(
+                f"SDK delete failed for {name}: {diagnostic}"
+            ) from None
 
     def list(self) -> builtins.list[dict[str, Any]]:
         """Lists all OpenStack VMs with their reachable IP addresses using the SDK."""
@@ -638,16 +701,20 @@ class OpenstackManager(CloudBaseManager):
             servers = conn.compute.servers()
             results = []
             for s in servers:
-                # Try to find a floating IP for the server
-                fip = None
-                # In openstacksdk, addresses are in a dict. We look for 'floating'
-                addresses = getattr(s, "addresses", {})
-                if addresses and "floating" in addresses:
-                    fip = (
-                        addresses["floating"][0].get("addr")
-                        if addresses["floating"]
-                        else None
-                    )
+                # In openstacksdk, addresses are grouped by network name
+                # (e.g. "auto_allocated_network" on Jetstream). A floating IP
+                # is marked with "OS-EXT-IPS:type": "floating"; a network
+                # named "floating" is also accepted.
+                addresses = getattr(s, "addresses", {}) or {}
+                fip = next(
+                    (
+                        a.get("addr")
+                        for net, addrs in addresses.items()
+                        for a in addrs or []
+                        if a.get("OS-EXT-IPS:type") == "floating" or net == "floating"
+                    ),
+                    None,
+                )
 
                 results.append(
                     {
@@ -1068,7 +1135,18 @@ class OpenstackManager(CloudBaseManager):
         except Exception as e:
             from cloudmesh.ai.vm.logger import logger
 
-            logger.error(f"Error uploading key {key_name}: {e}")
+            import re
+
+            error_message = str(e)
+            error_message = re.sub(
+                r"-----BEGIN ([A-Z ]*PRIVATE KEY)-----.*?-----END \1-----",
+                "[REDACTED PRIVATE KEY]",
+                error_message,
+                flags=re.DOTALL,
+            )
+            logger.error(
+                f"Error uploading key {key_name}: {error_message}"
+            )
             return False
 
     def delete_key(self, key_name: str, vm_name: str | None = None) -> bool:

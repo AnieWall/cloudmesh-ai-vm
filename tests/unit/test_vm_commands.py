@@ -4,6 +4,7 @@ import pytest
 from click.testing import CliRunner
 
 from cloudmesh.ai.command.vm import cmx
+from cloudmesh.ai.command.vm.start import _can_resume_existing_vm
 
 
 @pytest.fixture
@@ -18,6 +19,29 @@ def mock_provider():
     return provider
 
 
+@pytest.mark.parametrize(
+    ("provider", "vm", "name", "count", "vm_range", "expected"),
+    [
+        ("lima", {"status": "Stopped"}, "test-vm", None, None, True),
+        ("multipass", {"status": "Stopped"}, "test-vm", None, None, True),
+        ("LIMA", {"status": "STOPPED"}, "test-vm", None, None, True),
+        ("aws", {"status": "Stopped"}, "test-vm", None, None, False),
+        ("lima", {"status": "Running"}, "test-vm", None, None, False),
+        ("multipass", {"status": "Running"}, "test-vm", None, None, False),
+        ("lima", {"status": "Stopped"}, None, None, None, False),
+        ("multipass", {"status": "Stopped"}, None, 2, None, False),
+        ("lima", {"status": "Stopped"}, None, None, "1-2", False),
+        ("lima", {}, "test-vm", None, None, False),
+    ],
+)
+def test_can_resume_existing_vm(
+    provider, vm, name, count, vm_range, expected
+):
+    assert _can_resume_existing_vm(
+        provider, vm, name, count, vm_range
+    ) is expected
+
+
 def test_vm_start_success(runner, mock_provider):
     """Test that 'cmx vm start' successfully starts a VM."""
     with patch(
@@ -27,6 +51,93 @@ def test_vm_start_success(runner, mock_provider):
         result = runner.invoke(cmx, ["vm", "start", "test-vm"])
         assert result.exit_code == 0
         assert "Successfully started VM test-vm" in result.output
+
+
+def test_vm_start_existing_stopped_lima(runner, mock_provider):
+    """Starting an existing stopped Lima VM should resume it."""
+    mock_provider.cloud_name = "lima"
+    mock_provider.list.return_value = [{"name": "test-vm", "status": "Stopped"}]
+    mock_provider.start.return_value = "test-vm"
+
+    with patch(
+        "cloudmesh.ai.command.vm.start.get_active_provider",
+        return_value=mock_provider,
+    ):
+        result = runner.invoke(cmx, ["vm", "start", "test-vm"])
+
+    assert result.exit_code == 0, result.output
+    mock_provider.start.assert_called_once_with(
+        name="test-vm", assign_ip=True, duration=None
+    )
+
+
+def test_vm_start_existing_running_lima(runner, mock_provider):
+    """A running Lima VM must not be started again."""
+    mock_provider.cloud_name = "lima"
+    mock_provider.list.return_value = [{"name": "test-vm", "status": "Running"}]
+
+    with patch(
+        "cloudmesh.ai.command.vm.start.get_active_provider",
+        return_value=mock_provider,
+    ):
+        result = runner.invoke(cmx, ["vm", "start", "test-vm"])
+
+    assert result.exit_code != 0
+    assert "already exists" in result.output
+    assert "provider 'lima'" in result.output
+    mock_provider.start.assert_not_called()
+
+
+def test_vm_start_existing_stopped_multipass(runner, mock_provider):
+    """Starting an existing stopped Multipass VM should resume it (#49)."""
+    mock_provider.cloud_name = "multipass"
+    mock_provider.list.return_value = [{"name": "test-vm", "status": "Stopped"}]
+    mock_provider.start.return_value = "test-vm"
+
+    with patch(
+        "cloudmesh.ai.command.vm.start.get_active_provider",
+        return_value=mock_provider,
+    ):
+        result = runner.invoke(cmx, ["vm", "start", "test-vm"])
+
+    assert result.exit_code == 0, result.output
+    mock_provider.start.assert_called_once_with(
+        name="test-vm", assign_ip=True, duration=None
+    )
+
+
+def test_vm_start_existing_running_multipass(runner, mock_provider):
+    """A running Multipass VM must not be started again."""
+    mock_provider.cloud_name = "multipass"
+    mock_provider.list.return_value = [{"name": "test-vm", "status": "Running"}]
+
+    with patch(
+        "cloudmesh.ai.command.vm.start.get_active_provider",
+        return_value=mock_provider,
+    ):
+        result = runner.invoke(cmx, ["vm", "start", "test-vm"])
+
+    assert result.exit_code != 0
+    assert "already exists" in result.output
+    assert "provider 'multipass'" in result.output
+    mock_provider.start.assert_not_called()
+
+
+def test_vm_start_existing_stopped_other_provider(runner, mock_provider):
+    """Other providers retain duplicate-instance protection."""
+    mock_provider.cloud_name = "aws"
+    mock_provider.list.return_value = [{"name": "test-vm", "status": "Stopped"}]
+
+    with patch(
+        "cloudmesh.ai.command.vm.start.get_active_provider",
+        return_value=mock_provider,
+    ):
+        result = runner.invoke(cmx, ["vm", "start", "test-vm"])
+
+    assert result.exit_code != 0
+    assert "already exists" in result.output
+    assert "provider 'aws'" in result.output
+    mock_provider.start.assert_not_called()
 
 
 def test_vm_start_failure(runner, mock_provider):

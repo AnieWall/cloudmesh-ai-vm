@@ -1,7 +1,7 @@
 import re
 import shlex
 import builtins
-from typing import Any
+from typing import Any, List
 
 from cloudmesh.ai.vm.exceptions import ConfigError, VMProviderError, VMResourceError
 
@@ -400,7 +400,7 @@ class Provider(LocalBaseManager):
         )
         return False
 
-    def get_flavors(self, **kwargs) -> list[dict[str, Any]]:
+    def get_flavors(self, **kwargs) -> builtins.list[dict[str, Any]]:
         """Lists available hardware profiles for Multipass."""
         return [
             {"name": "default", "cpu": 1, "ram": "1GiB", "disk": "5GiB"},
@@ -408,7 +408,7 @@ class Provider(LocalBaseManager):
             {"name": "large", "cpu": 4, "ram": "4GiB", "disk": "20GiB"},
         ]
 
-    def list(self) -> list[dict[str, Any]]:
+    def list(self) -> builtins.list[dict[str, Any]]:
         """Lists all Multipass VMs."""
         try:
             import json
@@ -520,7 +520,7 @@ class Provider(LocalBaseManager):
         except Exception as e:
             raise VMProviderError(f"Error getting info for VM {name}: {e}")
 
-    def get_images(self, **kwargs) -> list[dict[str, Any]]:
+    def get_images(self, **kwargs) -> builtins.list[dict[str, Any]]:
         """Lists available Multipass images using 'multipass find --format json'."""
         try:
             import json
@@ -670,11 +670,11 @@ class Provider(LocalBaseManager):
             logger.error(f"Error deleting key from {vm_name}: {e}")
             return False
 
-    def get_keys(self) -> list[dict[str, Any]]:
+    def get_keys(self) -> builtins.list[dict[str, Any]]:
         """Multipass manages its own keys internally."""
         return [{"name": "multipass-default-key", "path": "~/.ssh/multipass_rsa"}]
 
-    def get_security_groups(self) -> list[dict[str, Any]]:
+    def get_security_groups(self) -> builtins.list[dict[str, Any]]:
         """Multipass uses host networking/firewall."""
         return [{"name": "default", "description": "Host network access"}]
 
