@@ -24,13 +24,22 @@ from cloudmesh.ai.command._shared.exceptions import handle_errors
 from cloudmesh.ai.command._shared.ui import render_table
 
 
-def _render_section(title: str, columns: list[str], rows: list[list]):
+def _render_section(
+    title: str,
+    columns: list[str],
+    rows: list[list],
+    no_wrap: list[str] | None = None,
+):
     """Render a table section if rows are present, otherwise print a note.
+
+    ``no_wrap`` allows callers to request that specific columns (e.g. "Name")
+    be displayed without truncation, mirroring the capability added to the UI
+    helper. This ensures long VM names are fully visible in the status output.
 
     Returns ``True`` when rows were rendered, ``False`` otherwise.
     """
     if rows:
-        render_table(title, columns, rows)
+        render_table(title, columns, rows, no_wrap=no_wrap)
         return True
     console.print(f"No {title.lower()} found.")
     return False
@@ -99,6 +108,7 @@ def status(ctx: click.Context, json_flag: bool = False, **kwargs) -> None:
                     ]
                     for vm in vms
                 ],
+                no_wrap=["Name"],
             )
             or any_output
         )
@@ -189,6 +199,7 @@ def status(ctx: click.Context, json_flag: bool = False, **kwargs) -> None:
                     ]
                     for vm in vms
                 ],
+                no_wrap=["Name"],
             )
             or any_output
         )
