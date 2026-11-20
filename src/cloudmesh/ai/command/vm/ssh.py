@@ -99,11 +99,17 @@ def ssh(ctx: click.Context, name: str | None = None, **kwargs) -> None:
 
     try:
         # Use subprocess.run without capture_output to allow interactive session
-        subprocess.run(ssh_cmd)
+        result = subprocess.run(ssh_cmd)
+        if result.returncode != 0:
+            raise VMCommandError(
+                f"SSH connection failed (exit code {result.returncode})."
+            )
     except KeyboardInterrupt:
         pass
-    except Exception as e:
-        raise VMCommandError(f"SSH connection failed: {e}")
+    except VMCommandError:
+        raise
+    except Exception:
+        raise VMCommandError("SSH connection failed.") from None
 
 
 cmd = ssh
