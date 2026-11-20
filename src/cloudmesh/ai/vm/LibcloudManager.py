@@ -16,12 +16,38 @@ logger = logging.getLogger("cloudmesh.ai.vm")
 class LibcloudManager(CloudBaseManager, ABC):
     """
     Base class for providers using the libcloud library.
+
+    Provides ``get_vm`` – a unified helper for node lookup, consolidating
+    driver calls and handling providers that lack a native ``get_node``.
     """
 
     def __init__(self, config: Any, cloud_name: str, **kwargs):
         super().__init__(config, **kwargs)
         self.cloud_name = cloud_name
         self.driver = self._get_driver()
+
+    def get_vm(self, name: str) -> Any:
+        """Unified node lookup.
+
+        Returns the libcloud node for *name* or ``None``. First attempts to
+        use ``driver.get_node`` (if present) and falls back to scanning all
+        nodes, matching by name or ID. Errors are logged and ``None`` is
+        returned on failure.
+        """
+        try:
+            if hasattr(self.driver, "get_node"):
+                node = self.driver.get_node(name)
+                if node:
+                    return node
+            # Fallback: list all nodes and find the matching one
+            nodes = self.driver.list_nodes()
+            return next(
+                (n for n in nodes if getattr(n, "name", None) == name or getattr(n, "id", None) == name),
+                None,
+            )
+        except Exception as e:
+            logger.error(f"Error retrieving VM {name} in {self.cloud_name}: {e}")
+            return None
 
     @abstractmethod
     def _get_driver(self) -> Any:
@@ -30,7 +56,8 @@ class LibcloudManager(CloudBaseManager, ABC):
     def _get_current_status(self, name: str) -> str:
         """Returns the current status of the VM using the libcloud driver."""
         try:
-            node = self.driver.get_node(name)
+            # unified node lookup
+            node = self.get_vm(name)
             return getattr(node, "state", "") if node else ""
         except Exception:
             return ""
@@ -40,7 +67,8 @@ class LibcloudManager(CloudBaseManager, ABC):
         Checks if a VM exists using the libcloud driver.
         """
         try:
-            node = self.driver.get_node(name)
+            # unified node lookup
+            node = self.get_vm(name)
             return node is not None
         except Exception:
             return False
@@ -117,7 +145,8 @@ class LibcloudManager(CloudBaseManager, ABC):
         if not name:
             return False
         try:
-            node = self.driver.get_node(name)
+            # unified node lookup
+            node = self.get_vm(name)
             if not node:
                 logger.error(f"VM {name} not found in {self.cloud_name}")
                 return False
@@ -138,7 +167,8 @@ class LibcloudManager(CloudBaseManager, ABC):
         if not name:
             return False
         try:
-            node = self.driver.get_node(name)
+            # unified node lookup
+            node = self.get_vm(name)
             if not node:
                 logger.error(f"VM {name} not found in {self.cloud_name}")
                 return False
@@ -159,7 +189,8 @@ class LibcloudManager(CloudBaseManager, ABC):
         if not name:
             return False
         try:
-            node = self.driver.get_node(name)
+            # unified node lookup
+            node = self.get_vm(name)
             if not node:
                 logger.error(f"VM {name} not found in {self.cloud_name}")
                 return False
@@ -183,7 +214,8 @@ class LibcloudManager(CloudBaseManager, ABC):
         if not name:
             return False
         try:
-            node = self.driver.get_node(name)
+            # unified node lookup
+            node = self.get_vm(name)
             if not node:
                 logger.error(f"VM {name} not found in {self.cloud_name}")
                 return False
@@ -200,7 +232,8 @@ class LibcloudManager(CloudBaseManager, ABC):
         if not name:
             return False
         try:
-            node = self.driver.get_node(name)
+            # unified node lookup
+            node = self.get_vm(name)
             if not node:
                 logger.error(f"VM {name} not found in {self.cloud_name}")
                 return False
@@ -235,7 +268,8 @@ class LibcloudManager(CloudBaseManager, ABC):
         if not self.exists(name):
             return {"error": f"VM {name} not found in {self.cloud_name}"}
         try:
-            node = self.driver.get_node(name)
+            # unified node lookup
+            node = self.get_vm(name)
             if not node:
                 return {"error": "VM not found"}
             return {
@@ -404,7 +438,8 @@ class LibcloudManager(CloudBaseManager, ABC):
 
     def run_command(self, name: str, cmd: str) -> str:
         try:
-            node = self.driver.get_node(name)
+            # unified node lookup
+            node = self.get_vm(name)
             if not node:
                 return f"Error: VM {name} not found in {self.cloud_name}."
 
@@ -427,7 +462,8 @@ class LibcloudManager(CloudBaseManager, ABC):
         Assigns a floating IP to the VM using libcloud.
         """
         try:
-            node = self.driver.get_node(name)
+            # unified node lookup
+            node = self.get_vm(name)
             if not node:
                 logger.error(f"VM {name} not found in {self.cloud_name}")
                 return None
@@ -452,7 +488,8 @@ class LibcloudManager(CloudBaseManager, ABC):
         Releases a floating IP from the VM using libcloud.
         """
         try:
-            node = self.driver.get_node(name)
+            # unified node lookup
+            node = self.get_vm(name)
             if not node:
                 logger.error(f"VM {name} not found in {self.cloud_name}")
                 return False
@@ -490,3 +527,6 @@ class LibcloudManager(CloudBaseManager, ABC):
             errors_map[config_name] = errors
 
         return errors_map
+
+    # Back‑compat – old code may have called `provider.get_node(name)`
+    get_node = get_vm   # noqa: E305
