@@ -1,4 +1,4 @@
-import datetime
+import datetime as dt
 import json
 import logging
 import os
@@ -42,11 +42,20 @@ from .ChameleonAuthManager import authenticate_chi_from_cloud
 
 
 def DDD(msg):
+    """Debug helper that logs a message using the module logger.
+
+    The original implementation printed directly to stdout, which bypassed
+    the project's unified logging and console handling.  It is now changed
+    to emit a ``debug`` level log entry via the shared ``logger`` instance.
+    This keeps output consistent with the rest of the codebase and avoids
+    unwanted side‑effects in test environments.
+    """
     if isinstance(msg, dict):
         msg = yaml.safe_dump(msg, sort_keys=False, default_flow_style=False)
     else:
         msg = str(msg)
-    print(msg)
+    # Use the module‑level logger for debug output instead of a raw print.
+    logger.debug(msg)
 
 
 class Provider(CloudBaseManager):
@@ -67,7 +76,10 @@ class Provider(CloudBaseManager):
 
     def _json_serial(self, obj):
         """JSON serializer for objects not serializable by default json code"""
-        if isinstance(obj, (datetime.datetime, datetime.date)):
+        # Use the module alias `dt` to avoid conflict between the imported
+        # `datetime` class and the `datetime` module. `dt.datetime` refers to the
+        # class, and `dt.date` refers to the date type.
+        if isinstance(obj, (dt.datetime, dt.date)):
             return obj.isoformat()
         return str(obj)
 
@@ -1030,7 +1042,8 @@ class Provider(CloudBaseManager):
                 self.__class__._mock_vm_name = None
             return True
 
-        print(f"Deleting Chameleon VM: {name}")
+        # Use the provider's ``print`` helper for consistent console output.
+        self.print(f"Deleting Chameleon VM: {name}")
         self._setup_chi_context()
         try:
             servers = chi.server.list_servers()
@@ -1150,7 +1163,8 @@ class Provider(CloudBaseManager):
                                 "Preserving the lease for manual review."
                             )
                         lease.delete()
-                        print(f"Successfully released lease: {lid}")
+                        # Report lease release using the manager's print method.
+                        self.print(f"Successfully released lease: {lid}")
                     except Exception as lease_err:
                         raise VMProviderError(
                             f"VM {server_name} was deleted successfully, "
@@ -1167,7 +1181,8 @@ class Provider(CloudBaseManager):
                     "The associated lease has been preserved."
                 )
 
-            print(f"Successfully deleted server: {server_name} ({server_id})")
+            # Use the manager's print helper for consistent output.
+            self.print(f"Successfully deleted server: {server_name} ({server_id})")
             _release_lease(lease_id)
             return True
         except Exception as e:
@@ -1327,7 +1342,8 @@ class Provider(CloudBaseManager):
             # print("TMP: " + tmp_name)
 
         except Exception as e:
-            print(f"Error calculating TTL: {e}")
+            # Log TTL calculation errors at debug level instead of printing directly.
+            logger.debug(f"Error calculating TTL: {e}")
 
         return str(ttl_str)
 
@@ -1434,7 +1450,8 @@ class Provider(CloudBaseManager):
             except Exception as e:
                 logger.debug(f"Could not fetch flavor map: {e}")
 
-            print(f"Found {len(servers)} servers.")
+            # Use the manager's unified print helper for output.
+            self.print(f"Found {len(servers)} servers.")
             results = []
 
             for s in servers:
@@ -1471,24 +1488,24 @@ class Provider(CloudBaseManager):
                         end_date_str = res_lookup[clean_id]["end_date"]
                         if end_date_str:
                             try:
-                                end_date = datetime.datetime.fromisoformat(end_date_str)
-                                now = (
-                                    datetime.datetime.now(datetime.timezone.utc)
-                                    if end_date.tzinfo
-                                    else datetime.datetime.now()
-                                )
-                                diff = end_date - now
-                                if diff.total_seconds() > 0:
-                                    days = diff.days
-                                    hours, rem = divmod(diff.seconds, 3600)
-                                    minutes, _ = divmod(rem, 60)
-                                    ttl = (
-                                        f"{days}d {hours}h {minutes}m"
-                                        if days > 0
-                                        else f"{hours}h {minutes}m"
-                                    )
-                                else:
-                                    ttl = "Expired"
+                                 end_date = dt.datetime.fromisoformat(end_date_str)
+                                 now = (
+                                     dt.datetime.now(datetime.timezone.utc)
+                                     if end_date.tzinfo
+                                     else dt.datetime.now()
+                                 )
+                                 diff = end_date - now
+                                 if diff.total_seconds() > 0:
+                                     days = diff.days
+                                     hours, rem = divmod(diff.seconds, 3600)
+                                     minutes, _ = divmod(rem, 60)
+                                     ttl = (
+                                         f"{days}d {hours}h {minutes}m"
+                                         if days > 0
+                                         else f"{hours}h {minutes}m"
+                                     )
+                                 else:
+                                     ttl = "Expired"
                             except:
                                 pass
                     elif isinstance(clean_id, str):
@@ -1505,7 +1522,8 @@ class Provider(CloudBaseManager):
                         "image": getattr(s, "image_name", "Unknown"),
                         "flavor": flavor_name,
                         "networks": self._format_networks(addresses),
-                        "ttl": ttl_data[s.name],
+                        # Use safe lookup to avoid KeyError for VMs without a reservation.
+                        "ttl": ttl_data.get(s.name, "N/A"),
                     }
                 )
 
