@@ -26,6 +26,11 @@
 ### Added
 - **Lima `list()` Enhancement**: Updated `LimaManager.list()` to detect the warning `WARN[0000] No instance found`. When this condition occurs, the method prints a helpful message and returns `None` (JSON `null`). Existing JSON parsing and columnar table fallback remain unchanged.
 - **Documentation Updates**: Added notes about the new `list()` behavior to `README.md` and `docs/providers/local/lima.md`.
+
+## [1.9.3] - 2026-11-20
+
+### Fixed
+- Updated `cmx vm ssh` and `cmx vm key upload` commands to use the new global `resolve_key_path` helper. This ensures the correct private key is used for SSH connections and eliminates the public‑key‑only bug that caused permission errors. The change also standardizes key handling across the CLI.
 ## [1.8.0] - 2026-10-31
 
 ### Added

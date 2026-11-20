@@ -16,7 +16,8 @@ Gregor von Laszewski
 - **Remote Execution**: Execute commands directly on your VMs using `cmx vm run <command>`.
 - **SSH Key Management**: Scan for local SSH keys, verify their GitHub authentication status, and manage keys on GitHub (list and upload) directly from the CLI.
 - **Security Management**: Create, assign, and manage firewall rules for your VMs directly from the CLI (with smart-presets for web and database servers).
-- **SSH Integration**: Generate suggested SSH configuration entries for existing VMs to enable seamless access via `ssh <hostname>`.
+19 | - **SSH Integration**: Generate suggested SSH configuration entries for existing VMs to enable seamless access via `ssh <hostname>`.
+20 | - **Improved SSH Key Resolution**: `cmx vm ssh` now uses the shared `resolve_key_path` helper to correctly locate the private key, eliminating the public‑key‑only bug and ensuring reliable SSH connections.
 - **Interactive Shell**: Enter a dedicated VM management shell using `cmx vm -i`.
 - **SDK Native**: OpenStack providers (Chameleon, Jetstream) are implemented using the official OpenStack SDK for maximum stability and feature support.
 - **Interactive Shell**: Enter a dedicated VM management shell using `cmx vm -i`.
