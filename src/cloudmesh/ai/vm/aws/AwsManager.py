@@ -6,7 +6,10 @@ from types import SimpleNamespace
 from typing import Any
 
 from cloudmesh.ai.vm.LibcloudManager import LibcloudManager
-from cloudmesh.ai.vm.exceptions import ProviderFeatureNotSupported
+from cloudmesh.ai.vm.exceptions import (
+    ProviderFeatureNotSupported,
+    VMProviderError,
+)
 
 from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider as LibcloudProvider
@@ -496,10 +499,9 @@ class Provider(LibcloudManager):
             raise VMProviderError(f"AWS instance {vm_name} not found")
 
         try:
-            # ``get_console_output`` returns a dict with an 'Output' key containing
-            # the (decoded) console string.
-            resp = self.client.get_console_output(InstanceId=node.id, Latest=True)
-            return resp.get("Output", "")
+            # Apache Libcloud returns decoded console text under "output".
+            resp = self.driver.ex_get_console_output(node)
+            return resp.get("output")
         except Exception as e:
             raise VMProviderError(f"Failed to retrieve console output for {vm_name}: {e}")
 
