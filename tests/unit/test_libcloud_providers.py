@@ -327,6 +327,7 @@ class TestAwsElasticIP:
     def test_tagging_failure_cleanup(self, provider_and_resources):
         provider, node, address = provider_and_resources
         address.instance_id = None
+        address.extra = {"allocation_id": "eipalloc-123"}
         provider.driver.ex_describe_all_addresses.side_effect = [
             [],
             [address],
@@ -349,6 +350,7 @@ class TestAwsElasticIP:
         """Clean up an allocation when AWS raises during tagging."""
         provider, node, address = provider_and_resources
         address.instance_id = None
+        address.extra = {"allocation_id": "eipalloc-123"}
 
         provider.driver.ex_describe_all_addresses.side_effect = [
             [],
@@ -396,6 +398,43 @@ class TestAwsElasticIP:
         provider.driver.ex_release_address.assert_not_called()
 
 
+    @pytest.mark.parametrize(
+        "association_metadata",
+        [
+            {"association_id": "eipassoc-456"},
+            {"interface_id": "eni-789"},
+            {
+                "association_id": "eipassoc-456",
+                "interface_id": "eni-789",
+            },
+        ],
+    )
+    def test_cleanup_preserves_network_interface_association(
+        self, provider_and_resources, association_metadata
+    ):
+        """Do not release an EIP with association metadata."""
+        provider, node, address = provider_and_resources
+        address.instance_id = None
+        address.extra = {
+            "allocation_id": "eipalloc-123",
+            **association_metadata,
+        }
+
+        provider.driver.ex_describe_all_addresses.side_effect = [
+            [],
+            [address],
+        ]
+        provider.driver.ex_allocate_address.return_value = address
+        provider.driver.ex_associate_address_with_node.side_effect = (
+            RuntimeError("Simulated association failure")
+        )
+
+        with patch.object(provider, "_find_node", return_value=node):
+            with pytest.raises(RuntimeError, match="association failure"):
+                provider.assign_floating_ip(node.id)
+
+        provider.driver.ex_release_address.assert_not_called()
+
     def test_reuse_existing_address(self, provider_and_resources):
         provider, node, address = provider_and_resources
         provider.driver.ex_describe_all_addresses.return_value = [address]
@@ -417,6 +456,7 @@ class TestAwsElasticIP:
     def test_association_failure_cleanup(self, provider_and_resources):
         provider, node, address = provider_and_resources
         address.instance_id = None
+        address.extra = {"allocation_id": "eipalloc-123"}
         provider.driver.ex_describe_all_addresses.side_effect = [
             [],
             [address],
