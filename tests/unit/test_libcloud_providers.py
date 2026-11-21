@@ -28,6 +28,7 @@ MOCK_CONFIG = {
         },
         "google": {
             "project_id": "test-project",
+            "service_account_email": "test@example.iam.gserviceaccount.com",
             "private_key": "/path/to/key.json",
             "image": "ubuntu-2204-lts",
             "size": "n1-standard-1",
@@ -99,8 +100,8 @@ class TestLibcloudProviders:
         mock_driver_class.assert_called_once_with(
             tenant_id="test-tenant",
             subscription_id="test-sub",
-            client_id="test-client",
-            client_secret="test-secret",
+            key="test-client",
+            secret="test-secret",
         )
         assert provider.cloud_name == "azure"
 
@@ -110,7 +111,10 @@ class TestLibcloudProviders:
         provider = GoogleProvider(MOCK_CONFIG)
 
         mock_driver_class.assert_called_once_with(
-            project_id="test-project", private_key="/path/to/key.json"
+            user_id="test@example.iam.gserviceaccount.com",
+            key="/path/to/key.json",
+            project="test-project",
+            auth_type="SA",
         )
 
     @patch("cloudmesh.ai.vm.azure.AzureManager.AzureDriver")
@@ -135,8 +139,8 @@ class TestLibcloudProviders:
         mock_driver_class.assert_called_once_with(
             tenant_id="test-tenant",
             subscription_id="test-sub",
-            client_id="test-client",
-            client_secret="test-secret",
+            key="test-client",
+            secret="test-secret",
         )
 
     def test_jetstream_factory_initialization(self):

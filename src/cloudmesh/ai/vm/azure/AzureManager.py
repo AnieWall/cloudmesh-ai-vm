@@ -11,13 +11,10 @@ from cloudmesh.ai.vm.logger import logger
 # Sanitise any exception messages that may contain credentials.
 from cloudmesh.ai.command._shared.providers_utils import sanitize_output
 
-try:
-    from libcloud.compute.providers.azure import AzureDriver
-except ImportError:
+from libcloud.compute.providers import get_driver
+from libcloud.compute.types import Provider as LibcloudProvider
 
-    class AzureDriver:
-        def __init__(self, *args, **kwargs):
-            pass
+AzureDriver = get_driver(LibcloudProvider.AZURE_ARM)
 
 
 class Provider(LibcloudManager):
@@ -40,8 +37,8 @@ class Provider(LibcloudManager):
         return AzureDriver(
             tenant_id=cloud_config.get("tenant_id"),
             subscription_id=cloud_config.get("subscription_id"),
-            client_id=cloud_config.get("client_id"),
-            client_secret=cloud_config.get("client_secret"),
+            key=cloud_config.get("client_id"),
+            secret=cloud_config.get("client_secret"),
         )
 
     def assign_floating_ip(self, name: str) -> str | None:

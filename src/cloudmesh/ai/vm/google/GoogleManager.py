@@ -10,13 +10,10 @@ from cloudmesh.ai.vm.logger import logger
 # Ensure any exception messages are filtered for secrets.
 from cloudmesh.ai.command._shared.providers_utils import sanitize_output
 
-try:
-    from libcloud.compute.providers.gce import GCEDriver
-except ImportError:
+from libcloud.compute.providers import get_driver
+from libcloud.compute.types import Provider as LibcloudProvider
 
-    class GCEDriver:
-        def __init__(self, *args, **kwargs):
-            pass
+GCEDriver = get_driver(LibcloudProvider.GCE)
 
 
 class Provider(LibcloudManager):
@@ -35,10 +32,32 @@ class Provider(LibcloudManager):
         super().__init__(config, cloud_name=cloud_name, **kwargs)
 
     def _get_driver(self):
-        cloud_config = self.get_cloud_config("google")
+        """Initialize the GCE driver with validated service-account settings."""
+        cloud_config = self.get_cloud_config(self.cloud_name)
+
+        required = (
+            "service_account_email",
+            "private_key",
+            "project_id",
+        )
+        missing = [
+            field
+            for field in required
+            if not isinstance(cloud_config.get(field), str)
+            or not cloud_config[field].strip()
+        ]
+
+        if missing:
+            raise VMProviderError(
+                "Missing or invalid Google Cloud configuration: "
+                + ", ".join(missing)
+            )
+
         return GCEDriver(
-            project_id=cloud_config.get("project_id"),
-            private_key=cloud_config.get("private_key"),
+            user_id=cloud_config["service_account_email"],
+            key=cloud_config["private_key"],
+            project=cloud_config["project_id"],
+            auth_type="SA",
         )
 
     def assign_floating_ip(self, name: str) -> str | None:
