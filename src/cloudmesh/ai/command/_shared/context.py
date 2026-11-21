@@ -249,7 +249,13 @@ def resolve_vms(
         )
 
     elif count:
-        all_vms = provider.list()
+        # Prefer the legacy ``list`` method if it exists; otherwise fall back to
+        # ``list_instances`` which is the newer API across providers.
+        if hasattr(provider, "list") and callable(provider.list):
+            all_vms = provider.list()
+        else:
+            list_fn = getattr(provider, "list_instances", None)
+            all_vms = list_fn() if callable(list_fn) else []
         if not all_vms:
             raise click.ClickException("No VMs found.")
 

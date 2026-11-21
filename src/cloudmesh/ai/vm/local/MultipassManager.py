@@ -436,19 +436,6 @@ class Provider(LocalBaseManager):
         except Exception as e:
             raise VMProviderError(f"Error listing Multipass VMs: {e}")
 
-    # ---------------------------------------------------------------------
-    # Compatibility shim – older code and tests may still call ``list``.
-    # ---------------------------------------------------------------------
-    def list(self, *args, **kwargs) -> builtins.list[dict[str, Any]]:
-        """Return the list of VMs using the legacy ``list`` name.
-
-        The provider now implements ``list_instances`` as the canonical method.
-        This shim simply forwards the call to maintain backward compatibility
-        with existing test suites and downstream code that still expects a
-        ``list`` method.
-        """
-        return self.list_instances(*args, **kwargs)
-
     def info(self, name: str | None = None, kind: str = "vm") -> dict[str, Any]:
         """Gets detailed information about a Multipass VM.
 

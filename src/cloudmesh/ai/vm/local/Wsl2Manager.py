@@ -164,18 +164,6 @@ class Provider(LocalBaseManager):
         except Exception:
             return []
 
-    # ---------------------------------------------------------------------
-    # Compatibility shim – older callers may still reference ``list``.
-    # ---------------------------------------------------------------------
-    def list(self, *args, **kwargs) -> builtins.list[dict[str, Any]]:
-        """Legacy alias that forwards to :py:meth:`list_instances`.
-
-        The provider now uses ``list_instances`` as the primary method for
-        retrieving distributions. This shim maintains backward compatibility with
-        existing test suites and external code that still calls ``list``.
-        """
-        return self.list_instances(*args, **kwargs)
-
     def get_console(self, vm_name: str, console_type: str = "text", **kwargs) -> str | None:
         """WSL2 does not provide a direct console; raise ``ProviderFeatureNotSupported``.
 

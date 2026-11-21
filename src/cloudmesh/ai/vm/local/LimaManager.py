@@ -249,18 +249,6 @@ class Provider(LocalBaseManager):
             self.print(f"DEBUG: LimaManager.list_instances - Exception occurred: {e}")
             return []
 
-    # ---------------------------------------------------------------------
-    # Compatibility shim – older code may still reference ``list``.
-    # ---------------------------------------------------------------------
-    def list(self, *args, **kwargs) -> builtins.list[dict[str, Any]]:
-        """Legacy alias for ``list_instances``.
-
-        Provides backward compatibility for callers that expect a ``list``
-        method on the provider. All positional and keyword arguments are
-        forwarded to ``list_instances`` (which currently ignores them).
-        """
-        return self.list_instances(*args, **kwargs)
-
 
 
     def exists(self, name: str) -> bool:

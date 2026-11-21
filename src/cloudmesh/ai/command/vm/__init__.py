@@ -6,10 +6,12 @@ from typing import Optional
 
 import click
 
+# Import the shared Rich console as ``rich_console`` to avoid name clashes with the
+# ``cloudmesh.ai.command.vm.console`` submodule (which also uses the name ``console``).
 from cloudmesh.ai.command._shared.context import (
     VMContext,
     cloud_callback,
-    console,
+    console as rich_console,
     debug_callback,
     verbose_callback,
 )
@@ -59,10 +61,10 @@ def vm_group(ctx: click.Context, interactive: bool = False) -> None:
     # Since we are in the group callback, we'll check if the command being called requires it.
     # For now, we'll allow it to be None and let the specific command handle the error if needed.
     if active_cloud:
-        console.print(f"Running on cloud: [bold blue]{active_cloud}[/bold blue]")
+        rich_console.print(f"Running on cloud: [bold blue]{active_cloud}[/bold blue]")
 
     if interactive:
-        console.print(
+        rich_console.print(
             "[bold green]Entering interactive VM shell. Type 'exit' or 'quit' to leave.[/bold green]"
         )
 
@@ -70,7 +72,7 @@ def vm_group(ctx: click.Context, interactive: bool = False) -> None:
             try:
                 prompt = f"[bold blue]({active_cloud}) vm>[bold blue] "
 
-                user_input = console.input(prompt)
+                user_input = rich_console.input(prompt)
                 if not user_input.strip():
                     continue
                 if user_input.strip().lower() in ("exit", "quit"):
@@ -85,13 +87,13 @@ def vm_group(ctx: click.Context, interactive: bool = False) -> None:
                 if cmd:
                     ctx.invoke(cmd, *cmd_args)
                 else:
-                    console.print(
+                    rich_console.print(
                         f"[red]Unknown command: {cmd_name}[/red]. Type 'help' for available commands."
                     )
             except KeyboardInterrupt:
-                console.print("\\n[yellow]Use 'exit' to leave the shell.[/yellow]")
+                rich_console.print("\\n[yellow]Use 'exit' to leave the shell.[/yellow]")
             except Exception as e:
-                console.print(f"[bold red]Shell Error:[/bold red] {e!s}")
+                rich_console.print(f"[bold red]Shell Error:[/bold red] {e!s}")
     else:
         pass
 
