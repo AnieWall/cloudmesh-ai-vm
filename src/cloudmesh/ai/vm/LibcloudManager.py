@@ -29,22 +29,28 @@ class LibcloudManager(CloudBaseManager, ABC):
     def get_vm(self, name: str) -> Any:
         """Unified node lookup.
 
-        Returns the libcloud node for *name* or ``None``. First attempts to
-        use ``driver.get_node`` (if present) and falls back to scanning all
-        nodes, matching by name or ID. Errors are logged and ``None`` is
-        returned on failure.
+        Returns the libcloud node for *name* (or identifier) or ``None``. The
+        lookup follows a **name‑first** strategy: it first attempts to resolve the
+        identifier as a VM **name**, and only if that fails does it fall back to
+        an **ID** match. This matches the typical user experience of the
+        ``cmx vm`` CLI, where users normally refer to VMs by name.
         """
         try:
             if hasattr(self.driver, "get_node"):
+                # Some drivers only understand IDs; keep this short‑circuit for
+                # those cases. If the driver returns a node we assume it is a
+                # valid lookup (ID or name) and return it.
                 node = self.driver.get_node(name)
                 if node:
                     return node
-            # Fallback: list all nodes and find the matching one
+            # Fallback: list all nodes and try name first, then ID.
             nodes = self.driver.list_nodes()
-            return next(
-                (n for n in nodes if getattr(n, "name", None) == name or getattr(n, "id", None) == name),
-                None,
-            )
+            # 1️⃣ Name match
+            node = next((n for n in nodes if getattr(n, "name", None) == name), None)
+            if node:
+                return node
+            # 2️⃣ ID match
+            return next((n for n in nodes if getattr(n, "id", None) == name), None)
         except Exception as e:
             logger.error(f"Error retrieving VM {name} in {self.cloud_name}: {e}")
             return None
@@ -511,7 +517,7 @@ class LibcloudManager(CloudBaseManager, ABC):
             )
             return False
 
-    def validate_config(self) -> dict[str, builtins.list[str]]:
+    def validate_config(self) -> dict[str, list[str]]:
         errors_map = {}
         cloud_config = self.get_cloud_config(self.cloud_name)
 

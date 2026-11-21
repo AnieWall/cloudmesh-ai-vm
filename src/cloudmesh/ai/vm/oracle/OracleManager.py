@@ -307,7 +307,7 @@ class Provider(CloudBaseManager):
                 return inst.id
         raise VMResourceError(f"Could not find Oracle instance with name {name}")
 
-    def validate_config(self) -> dict[str, builtins.list[str]]:
+    def validate_config(self) -> dict[str, list[str]]:
         errors_map = {}
         config = self.get_cloud_config(self.cloud_name)
         errors = []

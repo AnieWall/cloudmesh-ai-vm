@@ -163,7 +163,7 @@ class CloudBaseManager(BaseVMProvider, ABC):
         # Delegate to the underlying provider implementation (or super class)
         return super().info(name, kind=kind)
 
-    def get_security_groups(self) -> builtins.list[dict[str, Any]]:
+    def get_security_groups(self) -> list[dict[str, Any]]:
         """Lists available security groups for the current cloud."""
         return super().get_security_groups()
 
@@ -179,7 +179,7 @@ class CloudBaseManager(BaseVMProvider, ABC):
         """Returns the cost information for the provider."""
         return None
 
-    def validate_config(self) -> dict[str, builtins.list[str]]:
+    def validate_config(self) -> dict[str, list[str]]:
         """Validates that the cloud configuration has all required fields."""
         return {}
 
