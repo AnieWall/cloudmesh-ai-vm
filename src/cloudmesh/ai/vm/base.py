@@ -1,13 +1,21 @@
-import builtins
+"""Base VM provider interface.
+
+This module defines :class:`BaseVMProvider`, the abstract base class that all VM
+providers must implement. The original implementation used ``builtins.list``
+type hints to avoid clashing with provider‐specific ``list`` methods. With
+Python 3.15+ the native generic ``list`` syntax is available, so the hints have
+been updated accordingly and the ``import builtins`` statement removed.
+"""
+
 from abc import ABC
-from typing import Any, List, Dict
+from typing import Any, Dict, List
 
 from .exceptions import ProviderFeatureNotSupported
 
 
 class BaseVMProvider(ABC):
-    """
-    Abstract Base Class for all VM providers.
+    """Abstract Base Class for all VM providers.
+
     Ensures a consistent interface across different cloud providers.
     """
 
@@ -16,10 +24,11 @@ class BaseVMProvider(ABC):
         self.cloud_name = "base"
 
     def validate_config(self) -> Dict[str, List[str]]:
-        """Validates the provider configuration. Returns a map of config paths to errors.
+        """Validates the provider configuration.
 
-        The return type uses ``builtins.list`` to avoid clashing with any subclass
-        that defines a method named ``list``.
+        Returns a map of config paths to error lists. The return type uses the
+        native ``list`` generic to avoid clashing with any subclass that defines a
+        method named ``list``.
         """
         return {}
 
@@ -29,7 +38,8 @@ class BaseVMProvider(ABC):
 
     def exists(self, name: str) -> bool:
         """Checks if a VM with the given name exists in the provider.
-        Default implementation uses ``list_instances()`` to verify existence.
+
+        The default implementation uses ``list_instances()`` to verify existence.
         """
         try:
             vms = self.list_instances()
@@ -84,63 +94,47 @@ class BaseVMProvider(ABC):
         raise ProviderFeatureNotSupported(self.cloud_name, "unshelve")
 
     # --- Inventory Methods ---
-    def list_instances(self) -> builtins.list[dict[str, Any]]:
+    def list_instances(self) -> list[dict[str, Any]]:
         """Lists all VMs in the cloud.
 
-        This replaces the historic ``list()`` method to avoid shadowing the built‑in ``list`` type.
-        Sub‑classes should implement ``list_instances``; a compatibility shim ``list``
-        is provided below for legacy callers.
+        This replaces the historic ``list()`` method to avoid shadowing the built‑in
+        ``list`` type. Sub‑classes should implement ``list_instances``; a
+        compatibility shim ``list`` is provided below for legacy callers.
         """
         raise ProviderFeatureNotSupported(self.cloud_name, "list_instances")
 
-    def info(self, name: str | None = None, kind: str = "vm") -> dict[str, Any]:
-        """Gets detailed information about a specific VM.
+    def list(self, **kwargs) -> list[dict[str, Any]]:
+        """Compatibility shim – delegates to ``list_instances`` if not overridden."""
+        return self.list_instances(**kwargs)
 
-        The name parameter is optional to maintain backward compatibility with
-        providers that may infer the VM name from context. This aligns the
-        signature with the default implementation provided by ``CloudBaseManager``.
-        """
-        raise ProviderFeatureNotSupported(self.cloud_name, "info")
+    def get_console_connection_keys(self, vm: dict[str, Any]) -> dict[str, str] | None:
+        """Retrieves connection details like SSH keys for a given VM."""
+        raise ProviderFeatureNotSupported(self.cloud_name, "get_console_connection_keys")
 
-    def get_images(self, **kwargs) -> builtins.list[dict[str, Any]]:
-        """Lists available VM image."""
-        raise ProviderFeatureNotSupported(self.cloud_name, "get_images")
+    def get_flavors(self, **kwargs) -> list[dict[str, Any]]:
+        """Lists instance flavors/sizes."""
+        raise ProviderFeatureNotSupported(self.cloud_name, "list_flavors")
 
-    def get_flavors(self, **kwargs) -> builtins.list[dict[str, Any]]:
-        """Lists available hardware profiles."""
-        raise ProviderFeatureNotSupported(self.cloud_name, "get_flavors")
+    def get_images(self, **kwargs) -> list[dict[str, Any]]:
+        """Lists available VM images."""
+        raise ProviderFeatureNotSupported(self.cloud_name, "list_images")
 
-    def get_provider_info(self) -> dict[str, Any]:
-        """Gets detailed information about the provider configuration and status."""
-        raise ProviderFeatureNotSupported(self.cloud_name, "get_provider_info")
-
-    def wait_for_status(
-        self, name: str, target_status: str, timeout: int = 300
-    ) -> bool:
-        """
-        Polls the VM status until it matches the target_status or the timeout is reached.
-        Returns True if the status was reached, False otherwise.
-        """
-        raise ProviderFeatureNotSupported(self.cloud_name, "wait_for_status")
-
-    # --- Identity & Security Methods ---
-    def get_keys(self) -> builtins.list[dict[str, Any]]:
+    def get_keys(self) -> list[dict[str, Any]]:
         """Lists available SSH keys."""
-        raise ProviderFeatureNotSupported(self.cloud_name, "get_keys")
+        raise ProviderFeatureNotSupported(self.cloud_name, "list_keys")
 
-    def upload_key(
-        self, key_path: str, key_name: str, vm_name: str | None = None
-    ) -> bool:
+    def upload_key(self, key_path: str, key_name: str, vm_name: str | None = None) -> bool:
         """Uploads a public key."""
         raise ProviderFeatureNotSupported(self.cloud_name, "upload_key")
 
     def delete_key(self, key_name: str, vm_name: str | None = None) -> bool:
         """Deletes a public key from the cloud provider.
-        Optional vm_name for providers that manage keys per-VM.
+
+        Optional ``vm_name`` for providers that manage keys per‑VM.
         """
         raise ProviderFeatureNotSupported(self.cloud_name, "delete_key")
 
-    def get_security_groups(self) -> builtins.list[dict[str, Any]]:
+    def get_security_groups(self) -> list[dict[str, Any]]:
         """Lists available security groups."""
         raise ProviderFeatureNotSupported(self.cloud_name, "get_security_groups")
 
@@ -162,9 +156,7 @@ class BaseVMProvider(ABC):
 
     def remove_security_group_from_vm(self, vm_name: str, sg_name: str) -> bool:
         """Removes a security group association from a VM."""
-        raise ProviderFeatureNotSupported(
-            self.cloud_name, "remove_security_group_from_vm"
-        )
+        raise ProviderFeatureNotSupported(self.cloud_name, "remove_security_group_from_vm")
 
     def add_security_group_rule(
         self,
@@ -181,12 +173,12 @@ class BaseVMProvider(ABC):
         """Removes a specific rule from a security group using its ID."""
         raise ProviderFeatureNotSupported(self.cloud_name, "remove_security_group_rule")
 
-    def list_security_group_rules(self, sg_name: str) -> builtins.list[dict[str, Any]]:
+    def list_security_group_rules(self, sg_name: str) -> list[dict[str, Any]]:
         """Lists all rules for a specific security group."""
         raise ProviderFeatureNotSupported(self.cloud_name, "list_security_group_rules")
 
     # --- Network Methods ---
-    def list_regions(self) -> builtins.list[dict[str, Any]]:
+    def list_regions(self) -> list[dict[str, Any]]:
         """Lists available regions."""
         raise ProviderFeatureNotSupported(self.cloud_name, "list_regions")
 

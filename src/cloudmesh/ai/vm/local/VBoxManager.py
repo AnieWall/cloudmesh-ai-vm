@@ -1,4 +1,4 @@
-import builtins
+# Removed builtins import; native list generics are used.
 import re
 import shutil
 import time
@@ -73,7 +73,7 @@ class Provider(LocalBaseManager):
         except Exception as e:
             raise VMProviderError(f"Failed to delete VirtualBox VM {name}: {e}")
 
-    def list_instances(self) -> builtins.list[dict[str, Any]]:
+    def list_instances(self) -> list[dict[str, Any]]:
         """Lists VirtualBox VMs.
 
         The method parses the output of ``VBoxManage list vms`` which follows the
@@ -89,18 +89,13 @@ class Provider(LocalBaseManager):
 
             vms: list[dict[str, Any]] = []
             for line in lines:
-                # VBoxManage list vms output format: "VM Name" {uuid}
-                # Use a greedy match for the name and capture any characters inside the braces for UUID.
-                # The captured UUID does not include the surrounding braces; we add them back to match
-                # the expectations of the test suite (which asserts the value includes the braces).
-                match = re.match(r'^"(.+)"\s+\{([^}]+)\}$', line)
+                # Expected format: "\"VM Name\" {uuid}"
+                match = re.match(r'^"(?P<name>.+?)"\s+(?P<uuid>\{.+?\})$', line.strip())
                 if match:
-                    # Preserve the braces around the UUID as "{uuid}" to keep backward compatibility.
-                    vms.append({"name": match.group(1), "uuid": f"{{{match.group(2)}}}"})
+                    vms.append({"name": match.group("name"), "uuid": match.group("uuid")})
             return vms
         except Exception as e:
             raise VMProviderError(f"Error listing VirtualBox VMs: {e}")
-
 
     def login(self, name: str | None = None) -> bool:
         """VirtualBox does not provide a login operation; return True for API compatibility."""
@@ -146,20 +141,20 @@ class Provider(LocalBaseManager):
         except Exception as e:
             raise VMProviderError(f"Error restarting VM {name}: {e}")
 
-    def get_flavors(self, **kwargs) -> builtins.list[dict[str, Any]]:
+    def get_flavors(self, **kwargs) -> list[dict[str, Any]]:
         """VirtualBox resources are configured per VM."""
         return [{"name": "default", "description": "Customizable in VBoxManage modifyvm"}]
 
-    def get_keys(self) -> builtins.list[dict[str, Any]]:
+    def get_keys(self) -> list[dict[str, Any]]:
         """VirtualBox doesn't manage SSH keys."""
         return [{"name": "local-key", "path": "~/.ssh/id_rsa"}]
 
-    def get_security_groups(self) -> builtins.list[dict[str, Any]]:
+    def get_security_groups(self) -> list[dict[str, Any]]:
         """VirtualBox uses Networking Modes (NAT, Bridged, etc.)"""
         return [{"name": "NAT", "description": "Default VirtualBox NAT network"}]
 
     @property
-    def version(self) -> builtins.list[str]:
+    def version(self) -> list[str]:
         """Returns a list of version strings for the VBoxManage tool."""
         try:
             result = self._run_command(["VBoxManage", "--version"])

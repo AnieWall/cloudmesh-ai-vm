@@ -1,4 +1,4 @@
-import builtins
+# The builtins import is no longer needed after simplifying type hints.
 import os
 import subprocess
 from typing import Any, List, Dict
@@ -375,7 +375,7 @@ class Provider(CloudBaseManager):
             logger.error(f"OCI delete_key failed for {key_name}: {e}")
             return False
 
-    def list_regions(self) -> builtins.list[dict[str, Any]]:
+    def list_regions(self) -> list[dict[str, Any]]:
         """
         Lists available regions for Oracle Cloud.
         """

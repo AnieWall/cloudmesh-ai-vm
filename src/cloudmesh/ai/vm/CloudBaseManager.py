@@ -1,4 +1,4 @@
-import builtins
+# Removed import of builtins as native generic types are used.
 import os
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -332,7 +332,7 @@ class CloudBaseManager(BaseVMProvider, ABC):
             safe_msg = sanitize_output(str(e))
             raise VMProviderError(f"CLI command failed: {safe_msg}") from e
 
-    def _run_interactive(self, command: builtins.list[str]):
+    def _run_interactive(self, command: list[str]):
         """Runs a command directly connected to the terminal for smooth animations."""
         import subprocess
 
