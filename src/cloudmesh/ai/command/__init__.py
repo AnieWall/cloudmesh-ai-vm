@@ -79,5 +79,17 @@ def init_cmx():
     cmx.add_command(key_group, name="key")
 
 
-# Initialize the commands
-init_cmx()
+# NOTE: Previously the command groups were eagerly initialised on module import.
+# This caused a circular import when ``cloudmesh.ai.command`` was imported as a
+# side‑effect of loading ``cloudmesh.ai.command._shared.providers_utils`` (which
+# is required for secret‑masking).  The eager initialisation pulled in the
+# ``container`` sub‑module, which itself imports ``CloudBaseManager`` – still being
+# defined – leading to an ``ImportError: cannot import name 'CloudBaseManager'``.
+#
+# The CLI groups are only needed when the ``cmx`` command-line entry point is
+# executed, not during normal library imports or unit tests.  Therefore we defer
+# initialisation to the entry‑point script and omit the automatic call here.
+#
+# If CLI functionality is required programmatically, callers can invoke
+# ``init_cmx()`` explicitly after importing this package.
+# init_cmx()

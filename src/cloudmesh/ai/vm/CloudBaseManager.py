@@ -9,6 +9,11 @@ from rich import print as rprint
 from rich.pretty import Pretty
 from rich.text import Text
 
+# The sanitiser removes any credential‑like fragments from strings that will be
+# displayed to the user.  By applying it to ``print_ansi`` we guarantee that even
+# rich‑console output cannot leak secrets.
+from cloudmesh.ai.command._shared.providers_utils import sanitize_output
+
 from .base import BaseVMProvider
 
 
@@ -269,18 +274,59 @@ class CloudBaseManager(BaseVMProvider, ABC):
             return f"SSH Error: Unexpected error executing command: {e}"
 
     def print(self, *args, **kwargs):
-        """Helper to print output using the associated rich console if available."""
+        """Helper to print output using the associated rich console if available.
+
+        All string arguments are passed through ``sanitize_output`` to ensure that
+        no credential‑like fragments are written to the console or stdout.
+        """
+        # Convert each argument to a string and sanitise it.
+        safe_args = [sanitize_output(str(a)) for a in args]
         if self.console:
-            self.console.print(*args, **kwargs)
+            self.console.print(*safe_args, **kwargs)
         else:
-            print(*args, **kwargs)
+            print(*safe_args, **kwargs)
 
     def print_ansi(self, text: str, **kwargs):
-        """Prints text and cleans up ANSI sequences and CLI spinner artifacts."""
+        """Prints text and cleans up ANSI sequences and CLI spinner artifacts.
+
+        The string is first passed through ``sanitize_output`` to strip any
+        embedded secrets (tokens, passwords, etc.) before it reaches the console
+        or stdout.
+        """
+        safe_text = sanitize_output(text)
         if self.console:
-            self.console.print(Text.from_ansi(text), **kwargs)
+            self.console.print(Text.from_ansi(safe_text), **kwargs)
         else:
-            print(text, **kwargs)
+            print(safe_text, **kwargs)
+
+    # ---------------------------------------------------------------------
+    # CLI execution helper with secret masking
+    # ---------------------------------------------------------------------
+    def _run_cli_and_mask(self, *args, **kwargs):
+        """Execute a CLI command while ensuring any exception message is
+        stripped of credential‑like fragments.
+
+        Provider subclasses (e.g., :class:`OpenstackManager`) implement their own
+        ``_run_command`` method.  This helper delegates to that method and then
+        sanitises any raised exception using ``sanitize_output`` before re‑raising
+        a :class:`VMProviderError`.  Centralising the logic here guarantees that
+        all providers benefit from consistent secret‑masking without needing to
+        duplicate the implementation.
+        """
+        from cloudmesh.ai.command._shared.providers_utils import sanitize_output
+        from cloudmesh.ai.vm.exceptions import VMProviderError
+
+        try:
+            result = self._run_command(*args, **kwargs)
+            # ``_run_command`` raises on non‑zero exit codes, but when mocked it
+            # can return an object with a ``returncode`` attribute. Guard against
+            # that scenario as well.
+            if hasattr(result, "returncode") and result.returncode != 0:
+                raise VMProviderError("CLI command failed")
+            return result
+        except Exception as e:
+            safe_msg = sanitize_output(str(e))
+            raise VMProviderError(f"CLI command failed: {safe_msg}") from e
 
     def _run_interactive(self, command: builtins.list[str]):
         """Runs a command directly connected to the terminal for smooth animations."""

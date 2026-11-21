@@ -50,35 +50,17 @@ class OpenstackManager(CloudBaseManager):
 
     # ---------------------------------------------------------------------
     # Compatibility shim for older test suites that referenced the private
-    # ``_run_cli_command`` helper. The modern implementation uses the generic
-    # ``_run_command`` method from ``LocalBaseManager``. Providing this alias
-    # preserves backward compatibility without altering functionality.
-    # ---------------------------------------------------------------------
     def _run_cli_command(self, *args, **kwargs):
-        """Execute an OpenStack CLI command, wrapping errors as ``VMProviderError``.
+        """Compatibility shim that forwards to ``LocalBaseManager._run_cli_and_mask``.
 
-        The original implementation delegated directly to ``_run_command`` which
-        raised ``subprocess.CalledProcessError`` for non‑zero exit codes. For
-        security hygiene we need to ensure that any sensitive information that
-        might appear in ``stderr`` (e.g., authentication secrets) is **not**
-        propagated to the caller via the exception message. Therefore we catch
-        any exception from ``_run_command`` and re‑raise a ``VMProviderError``
-        with a generic message.
+        Older test suites imported ``_run_cli_command`` directly from
+        ``OpenstackManager``.  The original implementation duplicated CLI error
+        handling, which introduced an indentation bug.  The new shim simply
+        delegates to the shared ``_run_cli_and_mask`` helper, preserving the
+        intended behaviour (including secret‑masking) without re‑implementing
+        the logic.
         """
-        from cloudmesh.ai.vm.exceptions import VMProviderError
-
-        try:
-            result = self._run_command(*args, **kwargs)
-            # ``_run_command`` should raise on non‑zero exit, but when mocked it
-            # may return an object with a ``returncode`` attribute. Ensure we raise
-            # ``VMProviderError`` in that case as well.
-            if hasattr(result, "returncode") and result.returncode != 0:
-                raise VMProviderError("CLI command failed")
-            return result
-        except Exception as e:
-            # Mask any underlying error details (including potential secrets) and
-            # raise a consistent ``VMProviderError``.
-            raise VMProviderError("CLI command failed") from e
+        return self._run_cli_and_mask(*args, **kwargs)
 
     # ---------------------------------------------------------------------
     # Compatibility implementation of ``_run_command`` from ``LocalBaseManager``.

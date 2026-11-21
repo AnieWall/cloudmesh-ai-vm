@@ -7,6 +7,8 @@ from cloudmesh.ai.vm.exceptions import (
     VMResourceError,
 )
 from cloudmesh.ai.vm.logger import logger
+# Ensure any exception messages are filtered for secrets.
+from cloudmesh.ai.command._shared.providers_utils import sanitize_output
 
 try:
     from libcloud.compute.providers.gce import GCEDriver
@@ -88,7 +90,8 @@ class Provider(LibcloudManager):
             return True
         except Exception as e:
             logger.error(f"Error releasing floating IP from {name} in Google: {e}")
-            raise VMProviderError(f"Failed to release floating IP from {name}: {e}")
+            safe_msg = sanitize_output(str(e))
+            raise VMProviderError(f"Failed to release floating IP from {name}: {safe_msg}")
 
     def get_provider_info(self) -> dict[str, Any]:
         """Gets detailed information about the Google provider."""

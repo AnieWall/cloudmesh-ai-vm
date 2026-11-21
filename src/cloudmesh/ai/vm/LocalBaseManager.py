@@ -63,6 +63,34 @@ class LocalBaseManager(CloudBaseManager, ABC):
             logger.error(f"Unexpected error executing command {' '.join(command)}: {e}")
             raise e
 
+    # ---------------------------------------------------------------------
+    # CLI helper with secret‑masking
+    # ---------------------------------------------------------------------
+    def _run_cli_and_mask(self, *args, **kwargs):
+        """Execute a CLI command via ``_run_command`` while ensuring that any
+        exception message is stripped of credential‑like patterns.
+
+        This method mirrors the behaviour that ``OpenstackManager`` previously
+        implemented in its private ``_run_cli_command`` helper, but lives in the
+        base class so that *any* provider that needs to invoke an external CLI can
+        benefit from the same sanitisation logic.
+        """
+        from cloudmesh.ai.command._shared.providers_utils import sanitize_output
+        from cloudmesh.ai.vm.exceptions import VMProviderError
+
+        try:
+            result = self._run_command(*args, **kwargs)
+            # ``_run_command`` raises on non‑zero exit codes, but when mocked it
+            # can return an object with a ``returncode`` attribute. Guard against
+            # that scenario as well.
+            if hasattr(result, "returncode") and result.returncode != 0:
+                raise VMProviderError("CLI command failed")
+            return result
+        except Exception as e:
+            # Remove any secret fragments before propagating the error.
+            safe_msg = sanitize_output(str(e))
+            raise VMProviderError(f"CLI command failed: {safe_msg}") from e
+
     def exists(self, name: str) -> bool:
         """
         Checks if a VM exists by searching the list of all VMs.
