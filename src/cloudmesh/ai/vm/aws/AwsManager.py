@@ -281,7 +281,11 @@ class Provider(LibcloudManager):
                         "Cannot verify Elastic IP %s; manual reconciliation required",
                         address.ip,
                     )
-                elif current.instance_id:
+                elif (
+                    current.instance_id
+                    or current.extra.get("association_id")
+                    or current.extra.get("interface_id")
+                ):
                     logger.error(
                         "Elastic IP %s is associated; manual cleanup required",
                         address.ip,
