@@ -14,6 +14,22 @@ class VMCommandError(Exception):
         super().__init__(self.message)
 
 
+class VMFeatureNotSupported(VMCommandError):
+    """Raised when a provider does not support a requested feature (e.g., a console).
+
+    The CLI can catch this exception to provide a graceful fallback (for example,
+    falling back to an SSH session when a graphical console is unavailable).
+    """
+
+    def __init__(self, feature: str, provider: str | None = None):
+        self.feature = feature
+        self.provider = provider
+        msg = f"Feature '{feature}' not supported"
+        if provider:
+            msg += f" by provider '{provider}'"
+        super().__init__(msg)
+
+
 def handle_errors(f):
     """Decorator to catch VMCommandError and print it cleanly."""
 

@@ -5,6 +5,7 @@ from cloudmesh.ai.vm.exceptions import (
     ConfigError,
     VMProviderError,
     VMResourceError,
+    ProviderFeatureNotSupported,
 )
 
 from ..LocalBaseManager import LocalBaseManager

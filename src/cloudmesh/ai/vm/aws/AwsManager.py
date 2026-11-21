@@ -459,5 +459,34 @@ class Provider(LibcloudManager):
             },
         }
 
+    # ---------------------------------------------------------------------
+    # Console handling – AWS provides only a text console via ``get_console_output``.
+    # ---------------------------------------------------------------------
+    def get_console(self, vm_name: str, console_type: str = "text", **kwargs) -> str | None:
+        """Return a console output string for the given EC2 instance.
+
+        Parameters
+        ----------
+        vm_name: str
+            The name or ID of the instance.
+        console_type: str, optional
+            Currently only ``"text"`` is supported. Any other value raises
+            ``ProviderFeatureNotSupported``.
+        """
+        if console_type != "text":
+            raise ProviderFeatureNotSupported(self.cloud_name, f"console:{console_type}")
+
+        node = self._find_node(vm_name)
+        if not node:
+            raise VMProviderError(f"AWS instance {vm_name} not found")
+
+        try:
+            # ``get_console_output`` returns a dict with an 'Output' key containing
+            # the (decoded) console string.
+            resp = self.client.get_console_output(InstanceId=node.id, Latest=True)
+            return resp.get("Output", "")
+        except Exception as e:
+            raise VMProviderError(f"Failed to retrieve console output for {vm_name}: {e}")
+
 # Compatibility alias for matrix tests and historic imports.
 AwsManager = Provider

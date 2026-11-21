@@ -185,5 +185,22 @@ class Provider(LibcloudManager):
             logger.error(f"Error resetting Google VM {name}: {e}")
             return False
 
+    # ---------------------------------------------------------------------
+    # Console handling – Google Compute Engine provides a serial console via the
+    # ``gcloud compute instances get-serial-port-output`` command.  For simplicity
+    # and to avoid pulling in additional SDK calls, we raise ``ProviderFeatureNotSupported``
+    # for any console request.  The CLI will then fall back to an SSH session.
+    # ---------------------------------------------------------------------
+    def get_console(self, vm_name: str, console_type: str = "text", **kwargs) -> str | None:
+        """Return a console output or URL for a GCE VM.
+
+        Currently only ``"text"`` is conceptually supported via the ``gcloud`` CLI.
+        Because this repository does not depend on the ``gcloud`` binary in unit
+        tests, we raise ``ProviderFeatureNotSupported`` and let the CLI fallback
+        to SSH.  A future implementation could invoke ``gcloud`` or use the
+        Compute Engine REST API to fetch the serial console output.
+        """
+        raise ProviderFeatureNotSupported(self.cloud_name, f"console:{console_type}")
+
 # Compatibility alias for matrix tests and historic imports.
 GoogleManager = Provider

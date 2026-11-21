@@ -3,7 +3,7 @@ import shlex
 import builtins
 from typing import Any, List
 
-from cloudmesh.ai.vm.exceptions import ConfigError, VMProviderError, VMResourceError
+from cloudmesh.ai.vm.exceptions import ConfigError, VMProviderError, VMResourceError, ProviderFeatureNotSupported
 
 from ..LocalBaseManager import LocalBaseManager
 from cloudmesh.ai.vm.logger import logger
@@ -753,6 +753,13 @@ class Provider(LocalBaseManager):
             f"to reach status {target_status}."
         )
         return False
+
+    # ---------------------------------------------------------------------
+    # Console handling – Multipass does not expose a dedicated console endpoint.
+    # Raising ``ProviderFeatureNotSupported`` signals the CLI to fall back to SSH.
+    # ---------------------------------------------------------------------
+    def get_console(self, vm_name: str, console_type: str = "text", **kwargs) -> str | None:
+        raise ProviderFeatureNotSupported(self.cloud_name, f"console:{console_type}")
 
 # Compatibility alias for matrix tests and external imports.
 MultipassManager = Provider

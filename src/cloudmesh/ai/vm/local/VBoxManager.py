@@ -4,7 +4,7 @@ import shutil
 import time
 from typing import Any
 
-from cloudmesh.ai.vm.exceptions import VMProviderError, VMResourceError
+from cloudmesh.ai.vm.exceptions import VMProviderError, VMResourceError, ProviderFeatureNotSupported
 from cloudmesh.ai.vm.logger import logger
 
 from ..LocalBaseManager import LocalBaseManager
@@ -273,6 +273,14 @@ class Provider(LocalBaseManager):
             f"Timeout reached waiting for VirtualBox VM {name} to reach status {target_status}."
         )
         return False
+
+    # ---------------------------------------------------------------------
+    # Console handling – VBox does not provide a direct console URL via the SDK.
+    # Raising ``ProviderFeatureNotSupported`` triggers the CLI to use SSH as a
+    # fallback.
+    # ---------------------------------------------------------------------
+    def get_console(self, vm_name: str, console_type: str = "text", **kwargs) -> str | None:
+        raise ProviderFeatureNotSupported(self.cloud_name, f"console:{console_type}")
 
 
 # Compatibility alias for matrix tests and external imports.

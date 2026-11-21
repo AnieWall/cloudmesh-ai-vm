@@ -1,6 +1,6 @@
 import builtins
 import os
-from abc import ABC
+from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
 
@@ -336,3 +336,20 @@ class CloudBaseManager(BaseVMProvider, ABC):
             return subprocess.run(command, capture_output=False, check=True)
         except subprocess.CalledProcessError as e:
             raise e
+
+    # ---------------------------------------------------------------------
+    # Console handling – providers must implement this to expose a VM console.
+    # ---------------------------------------------------------------------
+    @abstractmethod
+    def get_console(self, vm_name: str, console_type: str = "text", **kwargs) -> str | None:
+        """Return a console URL (for graphical consoles) or raw text output.
+
+        ``console_type`` can be:
+        * ``"text"`` – return a plain‑text console (e.g., OpenStack server console output
+          or AWS EC2 instance console output).
+        * ``"novnc"`` or ``"spice"`` – return a URL that a web‑browser or VNC client can open.
+
+        Providers that cannot satisfy the requested console type must raise
+        ``ProviderFeatureNotSupported`` (imported from ``cloudmesh.ai.vm.exceptions``).
+        """
+        raise NotImplementedError

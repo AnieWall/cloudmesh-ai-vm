@@ -11,6 +11,7 @@ from cloudmesh.ai.vm.exceptions import (
     VMAuthError,
     VMProviderError,
     VMResourceError,
+    ProviderFeatureNotSupported,
 )
 # Helper to resolve SSH key location and name in a unified way.
 from cloudmesh.ai.vm.key_utils import resolve_key_path
@@ -1590,3 +1591,50 @@ class OpenstackManager(CloudBaseManager):
         """Normalizes status, treating 'active' as 'running'."""
         normalized = super()._normalize_status(status)
         return "running" if normalized == "active" else normalized
+
+    # ---------------------------------------------------------------------
+    # Console handling
+    # ---------------------------------------------------------------------
+    def get_console(self, vm_name: str, console_type: str = "text", **kwargs) -> str | None:
+        """Return a console URL (for graphical consoles) or raw console output.
+
+        Parameters
+        ----------
+        vm_name: str
+            Name or ID of the VM.
+        console_type: str, optional
+            ``"text"`` – return the plain‑text console output (e.g., ``nova get‑console‑output``).
+            ``"novnc"`` – return a URL for a noVNC console.
+            ``"spice"`` – return a URL for a SPICE console.
+        """
+        # Resolve the server object via the SDK helper
+        server = self._find_server(vm_name)
+        if not server:
+            raise VMProviderError(f"VM {vm_name} not found in {self.cloud_name}")
+
+        # Text console – use OpenStack SDK's console output API
+        if console_type == "text":
+            try:
+                output = self.conn.compute.get_server_console_output(server.id, length=None)
+                # The SDK returns a dict with key 'output' or raw string depending on version
+                if isinstance(output, dict):
+                    return output.get("output", "")
+                return str(output)
+            except Exception as e:
+                raise VMProviderError(f"Failed to retrieve console output for {vm_name}: {e}")
+
+        # Graphical consoles – use the SDK's ``get_server_console`` method
+        if console_type in ("novnc", "spice"):
+            # Map "spice" to the SDK name "spice-html5"
+            sdk_type = "novnc" if console_type == "novnc" else "spice-html5"
+            try:
+                console = self.conn.compute.get_server_console(server.id, type=sdk_type)
+                url = getattr(console, "url", None) or getattr(console, "href", None)
+                if not url:
+                    raise VMProviderError(f"Console URL not returned for {vm_name}")
+                return url
+            except Exception as e:
+                raise VMProviderError(f"Failed to retrieve {console_type} console for {vm_name}: {e}")
+
+        # Unsupported console type – raise a provider‑specific feature error
+        raise ProviderFeatureNotSupported(self.cloud_name, f"console:{console_type}")
