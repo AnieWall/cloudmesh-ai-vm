@@ -7,6 +7,8 @@ from cloudmesh.ai.vm.exceptions import (
     VMResourceError,
 )
 from cloudmesh.ai.vm.logger import logger
+# Ensure any exception messages are filtered for secrets.
+from cloudmesh.ai.command._shared.providers_utils import sanitize_output
 
 try:
     from libcloud.compute.providers.gce import GCEDriver
@@ -88,7 +90,8 @@ class Provider(LibcloudManager):
             return True
         except Exception as e:
             logger.error(f"Error releasing floating IP from {name} in Google: {e}")
-            raise VMProviderError(f"Failed to release floating IP from {name}: {e}")
+            safe_msg = sanitize_output(str(e))
+            raise VMProviderError(f"Failed to release floating IP from {name}: {safe_msg}")
 
     def get_provider_info(self) -> dict[str, Any]:
         """Gets detailed information about the Google provider."""
@@ -181,6 +184,23 @@ class Provider(LibcloudManager):
         except Exception as e:
             logger.error(f"Error resetting Google VM {name}: {e}")
             return False
+
+    # ---------------------------------------------------------------------
+    # Console handling – Google Compute Engine provides a serial console via the
+    # ``gcloud compute instances get-serial-port-output`` command.  For simplicity
+    # and to avoid pulling in additional SDK calls, we raise ``ProviderFeatureNotSupported``
+    # for any console request.  The CLI will then fall back to an SSH session.
+    # ---------------------------------------------------------------------
+    def get_console(self, vm_name: str, console_type: str = "text", **kwargs) -> str | None:
+        """Return a console output or URL for a GCE VM.
+
+        Currently only ``"text"`` is conceptually supported via the ``gcloud`` CLI.
+        Because this repository does not depend on the ``gcloud`` binary in unit
+        tests, we raise ``ProviderFeatureNotSupported`` and let the CLI fallback
+        to SSH.  A future implementation could invoke ``gcloud`` or use the
+        Compute Engine REST API to fetch the serial console output.
+        """
+        raise ProviderFeatureNotSupported(self.cloud_name, f"console:{console_type}")
 
 # Compatibility alias for matrix tests and historic imports.
 GoogleManager = Provider

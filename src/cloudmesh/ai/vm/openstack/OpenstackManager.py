@@ -11,6 +11,7 @@ from cloudmesh.ai.vm.exceptions import (
     VMAuthError,
     VMProviderError,
     VMResourceError,
+    ProviderFeatureNotSupported,
 )
 # Helper to resolve SSH key location and name in a unified way.
 from cloudmesh.ai.vm.key_utils import resolve_key_path
@@ -50,35 +51,17 @@ class OpenstackManager(CloudBaseManager):
 
     # ---------------------------------------------------------------------
     # Compatibility shim for older test suites that referenced the private
-    # ``_run_cli_command`` helper. The modern implementation uses the generic
-    # ``_run_command`` method from ``LocalBaseManager``. Providing this alias
-    # preserves backward compatibility without altering functionality.
-    # ---------------------------------------------------------------------
     def _run_cli_command(self, *args, **kwargs):
-        """Execute an OpenStack CLI command, wrapping errors as ``VMProviderError``.
+        """Compatibility shim that forwards to ``LocalBaseManager._run_cli_and_mask``.
 
-        The original implementation delegated directly to ``_run_command`` which
-        raised ``subprocess.CalledProcessError`` for non‑zero exit codes. For
-        security hygiene we need to ensure that any sensitive information that
-        might appear in ``stderr`` (e.g., authentication secrets) is **not**
-        propagated to the caller via the exception message. Therefore we catch
-        any exception from ``_run_command`` and re‑raise a ``VMProviderError``
-        with a generic message.
+        Older test suites imported ``_run_cli_command`` directly from
+        ``OpenstackManager``.  The original implementation duplicated CLI error
+        handling, which introduced an indentation bug.  The new shim simply
+        delegates to the shared ``_run_cli_and_mask`` helper, preserving the
+        intended behaviour (including secret‑masking) without re‑implementing
+        the logic.
         """
-        from cloudmesh.ai.vm.exceptions import VMProviderError
-
-        try:
-            result = self._run_command(*args, **kwargs)
-            # ``_run_command`` should raise on non‑zero exit, but when mocked it
-            # may return an object with a ``returncode`` attribute. Ensure we raise
-            # ``VMProviderError`` in that case as well.
-            if hasattr(result, "returncode") and result.returncode != 0:
-                raise VMProviderError("CLI command failed")
-            return result
-        except Exception as e:
-            # Mask any underlying error details (including potential secrets) and
-            # raise a consistent ``VMProviderError``.
-            raise VMProviderError("CLI command failed") from e
+        return self._run_cli_and_mask(*args, **kwargs)
 
     # ---------------------------------------------------------------------
     # Compatibility implementation of ``_run_command`` from ``LocalBaseManager``.
@@ -1682,3 +1665,50 @@ class OpenstackManager(CloudBaseManager):
         """Normalizes status, treating 'active' as 'running'."""
         normalized = super()._normalize_status(status)
         return "running" if normalized == "active" else normalized
+
+    # ---------------------------------------------------------------------
+    # Console handling
+    # ---------------------------------------------------------------------
+    def get_console(self, vm_name: str, console_type: str = "text", **kwargs) -> str | None:
+        """Return a console URL (for graphical consoles) or raw console output.
+
+        Parameters
+        ----------
+        vm_name: str
+            Name or ID of the VM.
+        console_type: str, optional
+            ``"text"`` – return the plain‑text console output (e.g., ``nova get‑console‑output``).
+            ``"novnc"`` – return a URL for a noVNC console.
+            ``"spice"`` – return a URL for a SPICE console.
+        """
+        # Resolve the server object via the SDK helper
+        server = self._find_server(vm_name)
+        if not server:
+            raise VMProviderError(f"VM {vm_name} not found in {self.cloud_name}")
+
+        # Text console – use OpenStack SDK's console output API
+        if console_type == "text":
+            try:
+                output = self.conn.compute.get_server_console_output(server.id, length=None)
+                # The SDK returns a dict with key 'output' or raw string depending on version
+                if isinstance(output, dict):
+                    return output.get("output", "")
+                return str(output)
+            except Exception as e:
+                raise VMProviderError(f"Failed to retrieve console output for {vm_name}: {e}")
+
+        # Graphical consoles – use the SDK's ``get_server_console`` method
+        if console_type in ("novnc", "spice"):
+            # Map "spice" to the SDK name "spice-html5"
+            sdk_type = "novnc" if console_type == "novnc" else "spice-html5"
+            try:
+                console = self.conn.compute.get_server_console(server.id, type=sdk_type)
+                url = getattr(console, "url", None) or getattr(console, "href", None)
+                if not url:
+                    raise VMProviderError(f"Console URL not returned for {vm_name}")
+                return url
+            except Exception as e:
+                raise VMProviderError(f"Failed to retrieve {console_type} console for {vm_name}: {e}")
+
+        # Unsupported console type – raise a provider‑specific feature error
+        raise ProviderFeatureNotSupported(self.cloud_name, f"console:{console_type}")

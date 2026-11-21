@@ -16,13 +16,12 @@ Gregor von Laszewski
 - **Remote Execution**: Execute commands directly on your VMs using `cmx vm run <command>`.
 - **SSH Key Management**: Scan for local SSH keys, verify their GitHub authentication status, and manage keys on GitHub (list and upload) directly from the CLI.
 - **Security Management**: Create, assign, and manage firewall rules for your VMs directly from the CLI (with smart-presets for web and database servers).
-19 | - **SSH Integration**: Generate suggested SSH configuration entries for existing VMs to enable seamless access via `ssh <hostname>`.
-20 | - **Improved SSH Key Resolution**: `cmx vm ssh` now uses the shared `resolve_key_path` helper to correctly locate the private key, eliminating the public‑key‑only bug and ensuring reliable SSH connections.
-- **Interactive Shell**: Enter a dedicated VM management shell using `cmx vm -i`.
-- **SDK Native**: OpenStack providers (Chameleon, Jetstream) are implemented using the official OpenStack SDK for maximum stability and feature support.
-- **Interactive Shell**: Enter a dedicated VM management shell using `cmx vm -i`.
-- **SDK Native**: OpenStack providers (Chameleon, Jetstream) are implemented using the official OpenStack SDK for maximum stability and feature support.
-  20 |  - **Environment Diagnostics**: Use `cmx vm doctor` to validate provider requirements (including mandatory `chi` library for Chameleon and optional `openstack`), configuration, and diagnostic information. Add the `--config` flag to run exhaustive configuration validation (replicates the smoke test).
+- **SSH Integration**: Generate suggested SSH configuration entries for existing VMs to enable seamless access via `ssh <hostname>`.
+- **Improved SSH Key Resolution**: `cmx vm ssh` now uses the shared `resolve_key_path` helper to correctly locate the private key, eliminating the public‑key‑only bug and ensuring reliable SSH connections.
+ - **Interactive Shell**: Enter a dedicated VM management shell using `cmx vm -i`.
+ - **SDK Native**: OpenStack providers (Chameleon, Jetstream) are implemented using the official OpenStack SDK for maximum stability and feature support.
+- **Interactive VM Console**: `cmx vm console` displays the VM's serial/text console directly in the terminal (default). Use `--type novnc` or `--type spice` to open a graphical console in a browser, and `--follow` to stream live console output.
+ - **Environment Diagnostics**: Use `cmx vm doctor` to validate provider requirements (including mandatory `chi` library for Chameleon and optional `openstack`), configuration, and diagnostic information. Add the `--config` flag to run exhaustive configuration validation (replicates the smoke test).
 
 The full documentation is available at: <https://cloudmesh-ai.github.io/cloudmesh-ai-vm/>
 
@@ -56,7 +55,7 @@ cmx vm provider set multipass
 # Start a VM (will be named username-1, username-2, etc.)
 cmx vm start
 
-# Start a VM without allocating a floating IP (useful when you don't need external access)
+# Start a VM without allocating a floating IP (useful when you want a console only)
 cmx vm start --noip
 
 # Run a command on the VM
@@ -75,15 +74,62 @@ cmx vm stop
 cmx vm start --cloud aws
 
 # List all VMs for current cloud
-75 | cmx vm list
-76 | ```
-77 | 
-78 | > **Note (Lima provider)**: When using the Lima provider, if no VM instances exist `cmx vm list` will emit a warning `WARN[0000] No instance found` and return `null` (JSON `null`). The CLI prints a helpful message and does not raise an error.
-79 | 
-80 | For a detailed description of the floating‑IP workflow, see the documentation page:
-`docs/floating-ip-workflow.md`.
 cmx vm list
-\n# Docker Container Management\n\n```bash\n# Run a container with a custom command (to keep it alive)\ncmx container run --name my-cont --image alpine sleep 3600\n\n# List running containers\ncmx container list\n\n# Get container info\ncmx container info my-cont\n\n# List IPs of all running containers\ncmx container ip list\n\n# Lifecycle management\ncmx container restart my-cont\ncmx container suspend pause my-cont\ncmx container suspend resume my-cont\n\n# Image management\ncmx container image pull alpine:latest\ncmx container image list\n\n# Stop and delete\ncmx container stop my-cont\ncmx container delete my-cont\n```\n
+```
+
+> **Note (Lima provider)**: When using the Lima provider, if no VM instances exist `cmx vm list` will emit a warning `WARN[0000] No instance found` and return `null` (JSON `null`). The CLI prints a helpful message and does not raise an error.
+
+### Console Access
+
+The new `cmx vm console` command provides direct access to a VM's serial/text console.
+
+```bash
+# Show the text console (default) of a VM named "my-vm"
+cmx vm console my-vm
+
+# Continuously follow console output (like `tail -f`)
+cmx vm console my-vm --follow
+
+# Open a graphical console using noVNC in the browser
+cmx vm console my-vm --type novnc
+
+# Open a graphical console using SPICE in the browser
+cmx vm console my-vm --type spice
+```
+
+If the selected provider does not support console access, the command gracefully falls back to `cmx vm ssh`.
+
+For a detailed description of the floating‑IP workflow, see the documentation page:
+`docs/floating-ip-workflow.md`.
+
+# Docker Container Management
+
+```bash
+# Run a container with a custom command (to keep it alive)
+cmx container run --name my-cont --image alpine sleep 3600
+
+# List running containers
+cmx container list
+
+# Get container info
+cmx container info my-cont
+
+# List IPs of all running containers
+cmx container ip list
+
+# Lifecycle management
+cmx container restart my-cont
+cmx container suspend pause my-cont
+cmx container suspend resume my-cont
+
+# Image management
+cmx container image pull alpine:latest
+cmx container image list
+
+# Stop and delete
+cmx container stop my-cont
+cmx container delete my-cont
+```
 
 # Manage SSH keys (Scan local, verify GitHub, or upload to GitHub)
 cmx key scan
@@ -94,7 +140,6 @@ cmx vm security-group create --name web-sg --preset web
 
 # Enter interactive VM shell
 cmx vm -i
-```
 
 ## VM Doctor & Troubleshooting
 
@@ -119,24 +164,6 @@ cmx vm doctor --cloud openstack
 ```
 
 For scripts, automated validation, or CI workflows, use strict mode:
-`cmx vm doctor --cloud multipass --strict`
-
-With `--strict`, Doctor returns exit code 1 when one or more required checks fail. A healthy provider returns exit code 0.
-
-Example:
-
-```bash
-VM Doctor: multipass
-
-Provider        PASS   Resolved provider: multipass
-Requirements    FAIL   One or more required provider tools are unavailable.
-Configuration   PASS   No configuration problems detected.
-Provider Info   SKIP   Skipped because provider requirements are unavailable.
-
-Doctor result: NEEDS ATTENTION
-```
-
-Doctor does not create, start, stop, restart, suspend, or delete virtual machines.
 
 ## Provider Support Matrix
 
@@ -161,6 +188,7 @@ Full documentation is available in the `/docs` folder or hosted via GitHub Pages
 - [Configuration Guide](docs/configuration.md)
 - [CLI Reference](docs/cli.md)
 - [Architecture Overview](docs/architecture.md)
+- [Console Command](docs/console.md)  <!-- New documentation page for `cmx vm console` -->
 
 ## Testing
 
@@ -210,7 +238,6 @@ Results are saved as `.txt` and `.json` files in the following structure:
 The `username` is retrieved from your `~/.config/cloudmesh/clouds.yaml` configuration file.
 
 Tests can be run in two modes:
-
 
 - **Unit Mode (Default)**: Uses a standardized `MockDriver` to verify return types and basic logic without needing cloud credentials, ensuring a reliable functional baseline across all providers.
   ```bash

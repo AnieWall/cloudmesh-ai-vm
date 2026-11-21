@@ -23,7 +23,7 @@
 ## Governance & Strategic Growth
 - [ ] NOT NEEDED AT THIS TIME: **The "Compliance Gate"**: Integrate the compliance suite into CI/CD to block PRs that introduce non-compliant providers.
 - [ ] **Performance SLAs**: Add timing benchmarks to ensure the `list()` and `info()` methods meet minimum speed requirements.
-- [ ] **Security & Hygiene Compliance**: Add checks for credential leakage in logs and resource cleanup (no zombie resources on failure).
+- [x] **Security & Hygiene Compliance**: Implemented secret‑masking via `SecretMaskFilter` and `VMProviderError` sanitisation, added `_run_cli_and_mask` helper for safe CLI execution, and ensured all providers clean up floating‑IP resources on failure. All unit and smoke tests now pass.
 - [ ] NOT NEEDED: **The "Compliance Badge" in the UI**: Feed compliance results into `PROVIDER_METADATA` to show a "Verified" badge in the CLI.
 
 ## Testing and fixing

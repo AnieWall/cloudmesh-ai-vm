@@ -7,6 +7,7 @@ from rich.console import Console
 
 from cloudmesh.ai.command._shared import ui
 from cloudmesh.ai.command.vm.list import _render_vms
+from tests.utils.ip_synthetic import synthetic_ip_pair
 
 LONG_NAME = "test-named-khajashabbirahmed-jetstream-vm"
 
@@ -21,14 +22,16 @@ def _render(width, func, *args, **kwargs):
 
 def test_vm_list_shows_full_name_at_80_columns():
     """The smoke tests run at 80 columns and search the output for the VM name."""
+    # Use synthetic IPs from the TEST‑NET block (RFC 5737); these addresses are never real hosts.
+    fixed_ip, floating_ip = synthetic_ip_pair("testnet")
     vm = {
         "name": LONG_NAME,
         "status": "ACTIVE",
-        "ip": "149.165.169.251",
+        "ip": floating_ip,
         "image": "Featured-Ubuntu22",
         "flavor": "m3.tiny",
         "ttl": "None",
-        "networks": ["10.0.140.67", "149.165.169.251"],
+        "networks": [fixed_ip, floating_ip],
     }
 
     output = _render(80, _render_vms, "jetstream", [vm])

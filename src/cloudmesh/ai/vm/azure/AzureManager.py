@@ -8,6 +8,8 @@ from cloudmesh.ai.vm.exceptions import (
     VMResourceError,
 )
 from cloudmesh.ai.vm.logger import logger
+# Sanitise any exception messages that may contain credentials.
+from cloudmesh.ai.command._shared.providers_utils import sanitize_output
 
 try:
     from libcloud.compute.providers.azure import AzureDriver
@@ -75,7 +77,8 @@ class Provider(LibcloudManager):
             return public_ip
         except Exception as e:
             logger.error(f"Error assigning floating IP to {name} in Azure: {e}")
-            raise VMProviderError(f"Failed to assign floating IP to {name}: {e}")
+            safe_msg = sanitize_output(str(e))
+            raise VMProviderError(f"Failed to assign floating IP to {name}: {safe_msg}")
 
     def release_floating_ip(self, name: str) -> bool:
         """
@@ -96,7 +99,8 @@ class Provider(LibcloudManager):
             return True
         except Exception as e:
             logger.error(f"Error releasing floating IP from {name} in Azure: {e}")
-            raise VMProviderError(f"Failed to release floating IP from {name}: {e}")
+            safe_msg = sanitize_output(str(e))
+            raise VMProviderError(f"Failed to release floating IP from {name}: {safe_msg}")
 
     def get_provider_info(self) -> dict[str, Any]:
         """Gets detailed information about the Azure provider."""

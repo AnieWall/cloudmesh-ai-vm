@@ -1,4 +1,3 @@
-import builtins
 import shutil
 from typing import Any
 
@@ -6,6 +5,7 @@ from cloudmesh.ai.vm.exceptions import (
     ConfigError,
     VMProviderError,
     VMResourceError,
+    ProviderFeatureNotSupported,
 )
 
 from ..LocalBaseManager import LocalBaseManager
@@ -136,7 +136,7 @@ class Provider(LocalBaseManager):
         except Exception as e:
             raise VMProviderError(f"Failed to delete WSL2 distribution {name}: {e}")
 
-    def list(self) -> builtins.list[dict[str, Any]]:
+    def list(self) -> list[dict[str, Any]]:
         """
         Lists WSL2 distributions.
         """
@@ -197,19 +197,19 @@ class Provider(LocalBaseManager):
         except Exception:
             return False
 
-    def get_flavors(self, **kwargs) -> builtins.list[dict[str, Any]]:
+    def get_flavors(self, **kwargs) -> list[dict[str, Any]]:
         """
         WSL2 does not have 'flavors' in the cloud sense.
         """
         return [{"name": "standard", "description": "Default WSL2 Resource allocation"}]
 
-    def get_keys(self) -> builtins.list[dict[str, Any]]:
+    def get_keys(self) -> list[dict[str, Any]]:
         """
         WSL2 uses local user keys.
         """
         return [{"name": "local-user-key", "path": "~/.ssh/id_rsa"}]
 
-    def get_security_groups(self) -> builtins.list[dict[str, Any]]:
+    def get_security_groups(self) -> list[dict[str, Any]]:
         """
         WSL2 uses host firewall/networking.
         """
@@ -318,7 +318,7 @@ class Provider(LocalBaseManager):
         raise VMResourceError(f"Distribution {name} not found in list")
 
     @property
-    def version(self) -> builtins.list[str]:
+    def version(self) -> list[str]:
         """
         Returns a list of version strings for the WSL tool.
         """
@@ -338,6 +338,9 @@ class Provider(LocalBaseManager):
         # Use our portable binary detection to see if any WSL executable is available.
         # This allows the provider to be detected even when running from inside WSL.
         binary = self._get_wsl_binary()
+        # If the WSL binary cannot be found, the requirement is not satisfied.
+        if not binary:
+            return False
         import shutil
 
         return shutil.which(binary) is not None
@@ -348,7 +351,7 @@ class Provider(LocalBaseManager):
         vm = next((v for v in vms if v["name"] == name), None)
         return vm["state"] if vm else ""
 
-    def validate_config(self) -> dict[str, builtins.list[str]]:
+    def validate_config(self) -> dict[str, list[str]]:
         """
         Validates WSL2 configuration.
         """

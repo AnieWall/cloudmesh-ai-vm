@@ -1,6 +1,6 @@
 import builtins
 import os
-from abc import ABC
+from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
 
@@ -8,6 +8,11 @@ import yaml
 from rich import print as rprint
 from rich.pretty import Pretty
 from rich.text import Text
+
+# The sanitiser removes any credential‑like fragments from strings that will be
+# displayed to the user.  By applying it to ``print_ansi`` we guarantee that even
+# rich‑console output cannot leak secrets.
+from cloudmesh.ai.command._shared.providers_utils import sanitize_output
 
 from .base import BaseVMProvider
 
@@ -163,7 +168,7 @@ class CloudBaseManager(BaseVMProvider, ABC):
         # Delegate to the underlying provider implementation (or super class)
         return super().info(name, kind=kind)
 
-    def get_security_groups(self) -> builtins.list[dict[str, Any]]:
+    def get_security_groups(self) -> list[dict[str, Any]]:
         """Lists available security groups for the current cloud."""
         return super().get_security_groups()
 
@@ -179,7 +184,7 @@ class CloudBaseManager(BaseVMProvider, ABC):
         """Returns the cost information for the provider."""
         return None
 
-    def validate_config(self) -> dict[str, builtins.list[str]]:
+    def validate_config(self) -> dict[str, list[str]]:
         """Validates that the cloud configuration has all required fields."""
         return {}
 
@@ -269,18 +274,59 @@ class CloudBaseManager(BaseVMProvider, ABC):
             return f"SSH Error: Unexpected error executing command: {e}"
 
     def print(self, *args, **kwargs):
-        """Helper to print output using the associated rich console if available."""
+        """Helper to print output using the associated rich console if available.
+
+        All string arguments are passed through ``sanitize_output`` to ensure that
+        no credential‑like fragments are written to the console or stdout.
+        """
+        # Convert each argument to a string and sanitise it.
+        safe_args = [sanitize_output(str(a)) for a in args]
         if self.console:
-            self.console.print(*args, **kwargs)
+            self.console.print(*safe_args, **kwargs)
         else:
-            print(*args, **kwargs)
+            print(*safe_args, **kwargs)
 
     def print_ansi(self, text: str, **kwargs):
-        """Prints text and cleans up ANSI sequences and CLI spinner artifacts."""
+        """Prints text and cleans up ANSI sequences and CLI spinner artifacts.
+
+        The string is first passed through ``sanitize_output`` to strip any
+        embedded secrets (tokens, passwords, etc.) before it reaches the console
+        or stdout.
+        """
+        safe_text = sanitize_output(text)
         if self.console:
-            self.console.print(Text.from_ansi(text), **kwargs)
+            self.console.print(Text.from_ansi(safe_text), **kwargs)
         else:
-            print(text, **kwargs)
+            print(safe_text, **kwargs)
+
+    # ---------------------------------------------------------------------
+    # CLI execution helper with secret masking
+    # ---------------------------------------------------------------------
+    def _run_cli_and_mask(self, *args, **kwargs):
+        """Execute a CLI command while ensuring any exception message is
+        stripped of credential‑like fragments.
+
+        Provider subclasses (e.g., :class:`OpenstackManager`) implement their own
+        ``_run_command`` method.  This helper delegates to that method and then
+        sanitises any raised exception using ``sanitize_output`` before re‑raising
+        a :class:`VMProviderError`.  Centralising the logic here guarantees that
+        all providers benefit from consistent secret‑masking without needing to
+        duplicate the implementation.
+        """
+        from cloudmesh.ai.command._shared.providers_utils import sanitize_output
+        from cloudmesh.ai.vm.exceptions import VMProviderError
+
+        try:
+            result = self._run_command(*args, **kwargs)
+            # ``_run_command`` raises on non‑zero exit codes, but when mocked it
+            # can return an object with a ``returncode`` attribute. Guard against
+            # that scenario as well.
+            if hasattr(result, "returncode") and result.returncode != 0:
+                raise VMProviderError("CLI command failed")
+            return result
+        except Exception as e:
+            safe_msg = sanitize_output(str(e))
+            raise VMProviderError(f"CLI command failed: {safe_msg}") from e
 
     def _run_interactive(self, command: builtins.list[str]):
         """Runs a command directly connected to the terminal for smooth animations."""
@@ -290,3 +336,20 @@ class CloudBaseManager(BaseVMProvider, ABC):
             return subprocess.run(command, capture_output=False, check=True)
         except subprocess.CalledProcessError as e:
             raise e
+
+    # ---------------------------------------------------------------------
+    # Console handling – providers must implement this to expose a VM console.
+    # ---------------------------------------------------------------------
+    @abstractmethod
+    def get_console(self, vm_name: str, console_type: str = "text", **kwargs) -> str | None:
+        """Return a console URL (for graphical consoles) or raw text output.
+
+        ``console_type`` can be:
+        * ``"text"`` – return a plain‑text console (e.g., OpenStack server console output
+          or AWS EC2 instance console output).
+        * ``"novnc"`` or ``"spice"`` – return a URL that a web‑browser or VNC client can open.
+
+        Providers that cannot satisfy the requested console type must raise
+        ``ProviderFeatureNotSupported`` (imported from ``cloudmesh.ai.vm.exceptions``).
+        """
+        raise NotImplementedError
