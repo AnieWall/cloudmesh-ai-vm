@@ -2,7 +2,7 @@ import builtins
 import os
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any
+from typing import Any, List, Dict
 
 import yaml
 from rich import print as rprint
@@ -184,7 +184,7 @@ class CloudBaseManager(BaseVMProvider, ABC):
         """Returns the cost information for the provider."""
         return None
 
-    def validate_config(self) -> dict[str, list[str]]:
+    def validate_config(self) -> Dict[str, List[str]]:
         """Validates that the cloud configuration has all required fields."""
         return {}
 

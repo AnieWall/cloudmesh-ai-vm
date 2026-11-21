@@ -49,14 +49,13 @@ class Provider(LibcloudManager):
         name: str | None = None,
         flavor: str | None = None,
         image: str | None = None,
-        size: str | None = None,
         **kwargs,
     ) -> str:
         """Create and start an AWS EC2 instance."""
         cloud_config = self.get_cloud_config("aws")
         vm_name = name or "vm-aws"
         instance_type = (
-            flavor or size or cloud_config.get("flavor")
+            flavor or cloud_config.get("flavor")
             or cloud_config.get("size")
         )
         image_id = image or cloud_config.get("image")
@@ -303,10 +302,17 @@ class Provider(LibcloudManager):
                 )
             raise
 
-    def release_floating_ip(
-        self, name: str, release_allocation: bool = True
-    ) -> bool:
-        """Disassociate an Elastic IP; optionally release its allocation."""
+    def release_floating_ip(self, name: str) -> bool:
+        """Disassociate an Elastic IP; always release its allocation.
+
+        The base ``BaseVMProvider`` defines ``release_floating_ip(self, name: str) -> bool``.
+        The ``release_allocation`` flag is not part of the public API and caused a
+        signature mismatch. We now always release the allocation (the original
+        default behavior) and remove the parameter to stay compatible with the
+        base class.
+        """
+        # Preserve original behaviour: always release the allocation.
+        release_allocation = True
         node = self._find_node(name)
         if node is None:
             return False

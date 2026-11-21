@@ -1,7 +1,7 @@
 import builtins
 import os
 import subprocess
-from typing import Any
+from typing import Any, List, Dict
 
 from cloudmesh.ai.vm.CloudBaseManager import CloudBaseManager
 from cloudmesh.ai.vm.exceptions import (
@@ -307,7 +307,7 @@ class Provider(CloudBaseManager):
                 return inst.id
         raise VMResourceError(f"Could not find Oracle instance with name {name}")
 
-    def validate_config(self) -> dict[str, list[str]]:
+    def validate_config(self) -> Dict[str, List[str]]:
         errors_map = {}
         config = self.get_cloud_config(self.cloud_name)
         errors = []

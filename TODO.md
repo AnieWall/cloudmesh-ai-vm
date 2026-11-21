@@ -15,7 +15,7 @@
  - [x] **Jetstream Manager Refactor**: Tightened type hints, expanded docstring, added logger warning for unknown flavors, and exposed __all__ for clean imports.
 
 ## Provider Compliance Suite Enhancements
-- [ ] **Compliance Matrix Reporting**: Create a custom report/table showing the compliance status of every provider across all tested features.
+ - [x] **Compliance Matrix Reporting**: Implemented a matrix‑generation script (`tests/matrix/generate_matrix.py`) that probes each provider’s capabilities and produces a Rich table as well as a JSON report (`tests/matrix/matrix_results.json`). The script can be used to generate a markdown report for documentation.
 - [ ] **Negative & Edge-Case Testing**: Add tests for invalid VM names, invalid configurations, and unauthorized API access.
 - [ ] **Strict Interface Validation**: Use the `inspect` module to verify that provider method signatures match `BaseVMProvider` exactly.
 - [ ] NOT NEEDED: **Configuration Granularity**: Split the centralized `all_providers.json` into individual config files per provider.

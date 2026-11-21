@@ -1,5 +1,6 @@
 import os
-from typing import Any
+import builtins
+from typing import Any, List, Dict
 
 from cloudmesh.ai.vm.exceptions import (
     VMProviderError,
@@ -155,7 +156,7 @@ class Provider(LocalBaseManager):
         except Exception as e:
             raise VMProviderError(f"Failed to delete Lima VM {name}: {e}")
 
-    def get_images(self, **kwargs) -> list[dict[str, Any]]:
+    def get_images(self, **kwargs) -> builtins.list[dict[str, Any]]:
         """Lists available Lima templates."""
         try:
             # limactl start --list-templates returns a list of templates
@@ -182,7 +183,7 @@ class Provider(LocalBaseManager):
             return []
 
 
-    def list(self) -> list[dict[str, Any]] | None:
+    def list(self) -> builtins.list[dict[str, Any]]:
         """Lists Lima VMs.
 
         The method runs ``limactl list`` (no explicit ``-f json`` flag).  If the
@@ -200,9 +201,9 @@ class Provider(LocalBaseManager):
             # ------------------------------------------------------------
             if "WARN[0000] No instance found" in output:
                 self.print(
-                    "WARN[0000] No instance found. Run `limactl create` to create an instance"
+                    f"⚠️ No Lima VMs found. Use `limactl start` to create one."
                 )
-                return None
+                return []
             if not output:
                 return []
             import json
@@ -315,7 +316,7 @@ class Provider(LocalBaseManager):
             return False
         return shutil.which("limactl") is not None
 
-    def validate_config(self) -> dict[str, list[str]]:
+    def validate_config(self) -> Dict[str, List[str]]:
         """
         Validates Lima configuration.
         """
@@ -418,14 +419,14 @@ class Provider(LocalBaseManager):
         """
         return [{"name": "default"}]
 
-    def get_keys(self) -> list[dict[str, Any]]:
+    def get_keys(self) -> builtins.list[dict[str, Any]]:
         """Returns a list of SSH key descriptors for Lima.
 
         The test suite expects a single key named ``lima-ssh-key``.
         """
         return [{"name": "lima-ssh-key"}]
 
-    def get_security_groups(self) -> list[dict[str, Any]]:
+    def get_security_groups(self) -> builtins.list[dict[str, Any]]:
         """Returns a placeholder security‑group list for Lima.
 
         Local providers typically use host networking; we return a default

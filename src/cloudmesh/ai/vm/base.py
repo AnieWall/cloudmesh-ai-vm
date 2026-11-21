@@ -1,6 +1,6 @@
 import builtins
 from abc import ABC
-from typing import Any
+from typing import Any, List, Dict
 
 from .exceptions import ProviderFeatureNotSupported
 
@@ -15,7 +15,7 @@ class BaseVMProvider(ABC):
         self.config = config
         self.cloud_name = "base"
 
-    def validate_config(self) -> dict[str, list[str]]:
+    def validate_config(self) -> Dict[str, List[str]]:
         """Validates the provider configuration. Returns a map of config paths to errors.
 
         The return type uses ``builtins.list`` to avoid clashing with any subclass
@@ -84,7 +84,7 @@ class BaseVMProvider(ABC):
         raise ProviderFeatureNotSupported(self.cloud_name, "unshelve")
 
     # --- Inventory Methods ---
-    def list(self) -> list[dict[str, Any]]:
+    def list(self) -> builtins.list[dict[str, Any]]:
         """Lists all VMs in the cloud.
 
         The annotation uses ``builtins.list`` to avoid name‑shadowing when a
@@ -103,11 +103,11 @@ class BaseVMProvider(ABC):
         """
         raise ProviderFeatureNotSupported(self.cloud_name, "info")
 
-    def get_images(self, **kwargs) -> list[dict[str, Any]]:
+    def get_images(self, **kwargs) -> builtins.list[dict[str, Any]]:
         """Lists available VM image."""
         raise ProviderFeatureNotSupported(self.cloud_name, "get_images")
 
-    def get_flavors(self, **kwargs) -> list[dict[str, Any]]:
+    def get_flavors(self, **kwargs) -> builtins.list[dict[str, Any]]:
         """Lists available hardware profiles."""
         raise ProviderFeatureNotSupported(self.cloud_name, "get_flavors")
 
@@ -125,7 +125,7 @@ class BaseVMProvider(ABC):
         raise ProviderFeatureNotSupported(self.cloud_name, "wait_for_status")
 
     # --- Identity & Security Methods ---
-    def get_keys(self) -> list[dict[str, Any]]:
+    def get_keys(self) -> builtins.list[dict[str, Any]]:
         """Lists available SSH keys."""
         raise ProviderFeatureNotSupported(self.cloud_name, "get_keys")
 
@@ -141,7 +141,7 @@ class BaseVMProvider(ABC):
         """
         raise ProviderFeatureNotSupported(self.cloud_name, "delete_key")
 
-    def get_security_groups(self) -> list[dict[str, Any]]:
+    def get_security_groups(self) -> builtins.list[dict[str, Any]]:
         """Lists available security groups."""
         raise ProviderFeatureNotSupported(self.cloud_name, "get_security_groups")
 
@@ -182,12 +182,12 @@ class BaseVMProvider(ABC):
         """Removes a specific rule from a security group using its ID."""
         raise ProviderFeatureNotSupported(self.cloud_name, "remove_security_group_rule")
 
-    def list_security_group_rules(self, sg_name: str) -> list[dict[str, Any]]:
+    def list_security_group_rules(self, sg_name: str) -> builtins.list[dict[str, Any]]:
         """Lists all rules for a specific security group."""
         raise ProviderFeatureNotSupported(self.cloud_name, "list_security_group_rules")
 
     # --- Network Methods ---
-    def list_regions(self) -> list[dict[str, Any]]:
+    def list_regions(self) -> builtins.list[dict[str, Any]]:
         """Lists available regions."""
         raise ProviderFeatureNotSupported(self.cloud_name, "list_regions")
 
