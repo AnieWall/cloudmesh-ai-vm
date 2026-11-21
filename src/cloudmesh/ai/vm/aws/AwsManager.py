@@ -33,19 +33,8 @@ class Provider(LibcloudManager):
         )
 
     def _find_node(self, identifier: str):
-        """Helper to find a node by name or ID since some driver versions lack get_node."""
-        try:
-            if hasattr(self.driver, "get_node"):
-                node = self.driver.get_node(identifier)
-                if node:
-                    return node
-        except Exception:
-            pass
-
-        nodes = self.driver.list_nodes()
-        return next(
-            (n for n in nodes if n.name == identifier or n.id == identifier), None
-        )
+        """Resolve an AWS instance using the shared name-first lookup."""
+        return self.get_vm(identifier)
 
     def start(
         self,

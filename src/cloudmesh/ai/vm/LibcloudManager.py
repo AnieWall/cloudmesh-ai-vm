@@ -36,23 +36,36 @@ class LibcloudManager(CloudBaseManager, ABC):
         ``cmx vm`` CLI, where users normally refer to VMs by name.
         """
         try:
-            if hasattr(self.driver, "get_node"):
-                # Some drivers only understand IDs; keep this short‑circuit for
-                # those cases. If the driver returns a node we assume it is a
-                # valid lookup (ID or name) and return it.
-                node = self.driver.get_node(name)
-                if node:
+            list_nodes = getattr(self.driver, "list_nodes", None)
+
+            if callable(list_nodes):
+                nodes = list_nodes()
+
+                # Exact name always takes precedence over an ID collision.
+                node = next(
+                    (n for n in nodes if getattr(n, "name", None) == name),
+                    None,
+                )
+                if node is not None:
                     return node
-            # Fallback: list all nodes and try name first, then ID.
-            nodes = self.driver.list_nodes()
-            # 1️⃣ Name match
-            node = next((n for n in nodes if getattr(n, "name", None) == name), None)
-            if node:
-                return node
-            # 2️⃣ ID match
-            return next((n for n in nodes if getattr(n, "id", None) == name), None)
+
+                # Fall back to an exact ID match only when no name matches.
+                return next(
+                    (n for n in nodes if getattr(n, "id", None) == name),
+                    None,
+                )
+
+            # Compatibility fallback for drivers exposing only get_node().
+            get_node = getattr(self.driver, "get_node", None)
+            if callable(get_node):
+                return get_node(name)
+
+            return None
+
         except Exception as e:
-            logger.error(f"Error retrieving VM {name} in {self.cloud_name}: {e}")
+            logger.error(
+                f"Error retrieving VM {name} in {self.cloud_name}: {e}"
+            )
             return None
 
     @abstractmethod
