@@ -1,7 +1,7 @@
 import builtins
 import logging
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, List, Dict
 
 from .CloudBaseManager import CloudBaseManager
 from .exceptions import (
@@ -517,7 +517,7 @@ class LibcloudManager(CloudBaseManager, ABC):
             )
             return False
 
-    def validate_config(self) -> dict[str, list[str]]:
+    def validate_config(self) -> Dict[str, List[str]]:
         errors_map = {}
         cloud_config = self.get_cloud_config(self.cloud_name)
 

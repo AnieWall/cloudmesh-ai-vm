@@ -46,7 +46,7 @@ class Provider(OpenstackManager):
         # The Jetstream provider is always identified by the literal name.
         super().__init__(config, cloud_name="jetstream", **kwargs)
 
-    def get_cost(self, **kwargs: Any) -> Dict[str, Any]:
+    def get_cost(self, **kwargs) -> Any | None:
         """Calculates and returns the cost (in SUs) for Jetstream based on usage patterns.
 
         Parameters

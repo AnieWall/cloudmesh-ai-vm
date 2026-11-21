@@ -2,7 +2,7 @@ import builtins
 import re
 import shutil
 import time
-from typing import Any
+from typing import Any, List, Dict
 
 from cloudmesh.ai.vm.exceptions import VMProviderError, VMResourceError, ProviderFeatureNotSupported
 from cloudmesh.ai.vm.logger import logger
@@ -222,7 +222,7 @@ class Provider(LocalBaseManager):
         except Exception as e:
             raise VMProviderError(f"Error getting info for VM {name}: {e}")
 
-    def validate_config(self) -> dict[str, builtins.list[str]]:
+    def validate_config(self) -> Dict[str, List[str]]:
         """Validates VirtualBox configuration."""
         return {}
 

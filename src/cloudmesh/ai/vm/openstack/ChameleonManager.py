@@ -1782,7 +1782,7 @@ class Provider(CloudBaseManager):
             logger.error(f"CHI assign_floating_ip failed for {name}: {e}")
             return None
 
-    def release_floating_ip(self, name: str, server=None) -> bool:
+    def release_floating_ip(self, name: str) -> bool:
         """Releases the floating IP associated with the VM.
 
         When ``server`` (a server object already validated against
@@ -1792,8 +1792,7 @@ class Provider(CloudBaseManager):
         """
         self._setup_chi_context()
         try:
-            if server is None:
-                server = chi.server.get_server(name)
+            server = chi.server.get_server(name)
             if not server:
                 return False
             fip = self._get_floating_ip(name, server=server)

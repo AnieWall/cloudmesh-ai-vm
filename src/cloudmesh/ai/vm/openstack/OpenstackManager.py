@@ -1,6 +1,6 @@
 import builtins
 from pathlib import Path
-from typing import Any
+from typing import Any, List, Dict
 
 import yaml
 import re
@@ -1553,7 +1553,7 @@ class OpenstackManager(CloudBaseManager):
         except Exception as e:
             return f"Unexpected error executing command: {e}"
 
-    def validate_config(self) -> dict[str, builtins.list[str]]:
+    def validate_config(self) -> Dict[str, List[str]]:
         """
         Validates OpenStack specific configuration.
         """

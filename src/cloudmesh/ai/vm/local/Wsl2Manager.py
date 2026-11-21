@@ -1,5 +1,6 @@
 import shutil
-from typing import Any
+import builtins
+from typing import Any, List, Dict
 
 from cloudmesh.ai.vm.exceptions import (
     ConfigError,
@@ -136,7 +137,7 @@ class Provider(LocalBaseManager):
         except Exception as e:
             raise VMProviderError(f"Failed to delete WSL2 distribution {name}: {e}")
 
-    def list(self) -> list[dict[str, Any]]:
+    def list(self) -> builtins.list[dict[str, Any]]:
         """
         Lists WSL2 distributions.
         """
@@ -197,19 +198,19 @@ class Provider(LocalBaseManager):
         except Exception:
             return False
 
-    def get_flavors(self, **kwargs) -> list[dict[str, Any]]:
+    def get_flavors(self, **kwargs) -> builtins.list[dict[str, Any]]:
         """
         WSL2 does not have 'flavors' in the cloud sense.
         """
         return [{"name": "standard", "description": "Default WSL2 Resource allocation"}]
 
-    def get_keys(self) -> list[dict[str, Any]]:
+    def get_keys(self) -> builtins.list[dict[str, Any]]:
         """
         WSL2 uses local user keys.
         """
         return [{"name": "local-user-key", "path": "~/.ssh/id_rsa"}]
 
-    def get_security_groups(self) -> list[dict[str, Any]]:
+    def get_security_groups(self) -> builtins.list[dict[str, Any]]:
         """
         WSL2 uses host firewall/networking.
         """
@@ -351,7 +352,7 @@ class Provider(LocalBaseManager):
         vm = next((v for v in vms if v["name"] == name), None)
         return vm["state"] if vm else ""
 
-    def validate_config(self) -> dict[str, list[str]]:
+    def validate_config(self) -> Dict[str, List[str]]:
         """
         Validates WSL2 configuration.
         """
