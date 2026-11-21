@@ -82,24 +82,24 @@ def get_active_provider(ctx: click.Context):
     register_providers()
 
     # Determine the active provider name.
-    # Priority order:
+    # Updated priority order to correctly respect the ``OS_CLOUD`` environment
+    # variable, which historically should override the configuration's default
+    # cloud. The new order is:
     #   1. CLI ``--cloud`` override.
-    #   2. ``default_cloud`` setting from the user's configuration (StateManager).
-    #   3. ``OS_CLOUD`` environment variable (kept for backward compatibility).
+    #   2. ``OS_CLOUD`` environment variable (backward compatibility).
+    #   3. ``default_cloud`` setting from the user's configuration (StateManager).
     #   4. Fallback to ``multipass`` (the historic default).
 
-    # Resolve the active provider name without returning early.
-    # The function will ultimately return a *provider instance* (not just the name).
-    # Determine the name following the precedence described above.
+    # Resolve the active provider name without returning early. The function will
+    # ultimately return a *provider instance* (not just the name).
     cloud_name = ctx.obj.cloud_override if ctx.obj else None
     if not cloud_name:
-        # Config default (if a StateManager config is present).
-        if state.config:
+        # 1) Environment variable ``OS_CLOUD`` takes precedence over the config.
+        cloud_name = os.environ.get("OS_CLOUD")
+        # 2) If ``OS_CLOUD`` is not set, fall back to the config's ``default_cloud``.
+        if not cloud_name and state.config:
             cloud_name = state.config.db.get("default_cloud", "multipass") or "multipass"
-        # If still not set, fall back to the OS_CLOUD environment variable.
-        if not cloud_name:
-            cloud_name = os.environ.get("OS_CLOUD")
-        # Final fallback.
+        # 3) Final fallback to the historic default.
         if not cloud_name:
             cloud_name = "multipass"
 
