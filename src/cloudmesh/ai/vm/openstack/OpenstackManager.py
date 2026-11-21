@@ -627,8 +627,12 @@ class OpenstackManager(CloudBaseManager):
             logger.error(f"SDK delete failed for {name}: {e}")
             raise VMProviderError(f"SDK delete failed for {name}: {e}") from e
 
-    def list(self) -> builtins.list[dict[str, Any]]:
-        """Lists all OpenStack VMs with their reachable IP addresses using the SDK."""
+    def list_instances(self) -> builtins.list[dict[str, Any]]:
+        """Lists all OpenStack VMs with their reachable IP addresses using the SDK.
+
+        Replaces the former ``list()`` method name. A compatibility shim ``list``
+        is added below.
+        """
         try:
             conn = self._get_sdk_conn()
             servers = conn.compute.servers()
@@ -670,6 +674,20 @@ class OpenstackManager(CloudBaseManager):
 
             logger.error(f"SDK list failed: {e}")
             return []
+
+    # ---------------------------------------------------------------------
+    # Compatibility shim – older code and tests may still call ``list``.
+    # ---------------------------------------------------------------------
+    def list(self) -> builtins.list[dict[str, Any]]:
+        """Return the list of VMs using the legacy ``list`` name.
+
+        The provider now implements ``list_instances`` as the canonical method.
+        This shim simply forwards the call to maintain backward compatibility
+        with existing test suites and downstream code that still expects a
+        ``list`` method.
+        """
+        return self.list_instances()
+
 
     def info(self, name: str | None = None, kind: str = "vm") -> dict[str, Any]:
         """

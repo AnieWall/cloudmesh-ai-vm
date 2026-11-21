@@ -302,17 +302,26 @@ class Provider(LibcloudManager):
                 )
             raise
 
-    def release_floating_ip(self, name: str) -> bool:
-        """Disassociate an Elastic IP; always release its allocation.
+    def release_floating_ip(self, name: str, release_allocation: bool = True) -> bool:
+        """Disassociate an Elastic IP from an EC2 instance.
 
-        The base ``BaseVMProvider`` defines ``release_floating_ip(self, name: str) -> bool``.
-        The ``release_allocation`` flag is not part of the public API and caused a
-        signature mismatch. We now always release the allocation (the original
-        default behavior) and remove the parameter to stay compatible with the
-        base class.
+        Parameters
+        ----------
+        name: str
+            The name or identifier of the EC2 instance.
+        release_allocation: bool, optional
+            When ``True`` (default) the Elastic IP allocation is also released
+            after successful disassociation via ``ex_release_address``.  When
+            ``False`` only the disassociation (`ex_disassociate_address`) is
+            performed, leaving the allocation allocated for future reuse.
+
+        The original implementation always released the allocation and did not
+        expose a ``release_allocation`` argument, which caused a ``TypeError``
+        in the test suite.  This method now respects the flag while preserving
+        the existing validation and ownership‑check logic.
         """
-        # Preserve original behaviour: always release the allocation.
-        release_allocation = True
+        # The ``release_allocation`` flag is now a public argument; the original
+        # comment about a signature mismatch is no longer applicable.
         node = self._find_node(name)
         if node is None:
             return False

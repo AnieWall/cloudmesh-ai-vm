@@ -1347,8 +1347,12 @@ class Provider(CloudBaseManager):
 
         return str(ttl_str)
 
-    def list(self) -> builtins.list[dict[str, Any]]:
-        """Lists all Chameleon VMs with their reachable IP addresses and TTL."""
+    def list_instances(self) -> builtins.list[dict[str, Any]]:
+        """Lists all Chameleon VMs with their reachable IP addresses and TTL.
+
+        Replaces the older ``list()`` method name. A compatibility shim ``list``
+        is provided below.
+        """
         if os.getenv("CLOUDMESH_CHAMELEON_MOCK") == "1":
             mock_name = getattr(self.__class__, "_mock_vm_name", None)
             if mock_name:
@@ -1533,6 +1537,7 @@ class Provider(CloudBaseManager):
 
             logger.warning(f"CHI list failed: {e}")
             return []
+
 
     def _get_flavor_info(self, server) -> tuple[str, str, str]:
         """
@@ -1782,17 +1787,28 @@ class Provider(CloudBaseManager):
             logger.error(f"CHI assign_floating_ip failed for {name}: {e}")
             return None
 
-    def release_floating_ip(self, name: str) -> bool:
+    def release_floating_ip(self, name: str, server: Any | None = None) -> bool:
         """Releases the floating IP associated with the VM.
 
-        When ``server`` (a server object already validated against
-        ``list_servers()``) is provided, it is used directly for both the
-        lookup and the dissociation, so the floating IP of an unrelated VM
-        can never be released.
+        Parameters
+        ----------
+        name: str
+            The VM name or identifier.
+        server: Any, optional
+            A pre‑validated server object (as returned by ``list_servers``).  If
+            provided, the method skips the name‑based lookup and operates on the
+            given object directly.  This prevents accidental manipulation of a
+            different VM that might be returned by ``chi.server.get_server``.
+
+        The method detaches the floating IP (if any) using ``detach_floating_ip``
+        with ``delete=True`` and returns ``True`` on success.  If no floating
+        IP is associated or the VM cannot be found, ``False`` is returned.
         """
         self._setup_chi_context()
         try:
-            server = chi.server.get_server(name)
+            # Use the supplied ``server`` if given; otherwise resolve via name.
+            if server is None:
+                server = chi.server.get_server(name)
             if not server:
                 return False
             fip = self._get_floating_ip(name, server=server)
@@ -1801,6 +1817,7 @@ class Provider(CloudBaseManager):
                 return True
             return False
         except chi.exception.ResourceError as e:
+            # Translate 404‑style not‑found errors to a simple ``False`` response.
             if "404" in str(e) or "not found" in str(e).lower():
                 return False
             from cloudmesh.ai.vm.logger import logger
@@ -2170,6 +2187,23 @@ class Provider(CloudBaseManager):
             logger.error(f"CHI get_flavors failed for {self.cloud_name}: {e}")
             return []
             return []
+            return []
+            return []
+
+    # ---------------------------------------------------------------------
+    # Console handling – Chameleon Cloud does not provide a direct console
+    # endpoint via the ``chi`` SDK.  Raising ``ProviderFeatureNotSupported``
+    # signals the CLI to fall back to an SSH session, mirroring the behaviour
+    # of other providers that lack console support.
+    # ---------------------------------------------------------------------
+    def get_console(self, vm_name: str, console_type: str = "text", **kwargs) -> str | None:
+        """Return a console URL or raw console output for a Chameleon VM.
+
+        At present the Chameleon provider does not expose a console API.  This
+        method therefore always raises ``ProviderFeatureNotSupported`` to allow
+        the higher‑level CLI to fallback to an SSH connection.
+        """
+        raise ProviderFeatureNotSupported(self.cloud_name, f"console:{console_type}")
 
 # Export a compatibility alias for matrix tests that import ``ChameleonManager``
 # directly. The entry point still references ``Provider``, but the test suite

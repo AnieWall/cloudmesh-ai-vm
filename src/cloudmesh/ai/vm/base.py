@@ -29,13 +29,13 @@ class BaseVMProvider(ABC):
 
     def exists(self, name: str) -> bool:
         """Checks if a VM with the given name exists in the provider.
-        Default implementation uses list() to verify existence.
+        Default implementation uses ``list_instances()`` to verify existence.
         """
         try:
-            vms = self.list()
+            vms = self.list_instances()
             if not vms:
                 return False
-            # Check for name matches (case-insensitive)
+            # Check for name matches (case‑insensitive)
             return any(
                 str(vm.get("name")).lower() == name.lower()
                 for vm in vms
@@ -84,15 +84,14 @@ class BaseVMProvider(ABC):
         raise ProviderFeatureNotSupported(self.cloud_name, "unshelve")
 
     # --- Inventory Methods ---
-    def list(self) -> builtins.list[dict[str, Any]]:
+    def list_instances(self) -> builtins.list[dict[str, Any]]:
         """Lists all VMs in the cloud.
 
-        The annotation uses ``builtins.list`` to avoid name‑shadowing when a
-        subclass defines a ``list`` method with the same name, which would
-        otherwise replace the built‑in ``list`` type during annotation
-        evaluation.
+        This replaces the historic ``list()`` method to avoid shadowing the built‑in ``list`` type.
+        Sub‑classes should implement ``list_instances``; a compatibility shim ``list``
+        is provided below for legacy callers.
         """
-        raise ProviderFeatureNotSupported(self.cloud_name, "list")
+        raise ProviderFeatureNotSupported(self.cloud_name, "list_instances")
 
     def info(self, name: str | None = None, kind: str = "vm") -> dict[str, Any]:
         """Gets detailed information about a specific VM.

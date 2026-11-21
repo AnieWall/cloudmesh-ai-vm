@@ -1,9 +1,7 @@
 import shutil
 import builtins
 from typing import Any, List, Dict
-
 from cloudmesh.ai.vm.exceptions import (
-    ConfigError,
     VMProviderError,
     VMResourceError,
     ProviderFeatureNotSupported,
@@ -137,9 +135,11 @@ class Provider(LocalBaseManager):
         except Exception as e:
             raise VMProviderError(f"Failed to delete WSL2 distribution {name}: {e}")
 
-    def list(self) -> builtins.list[dict[str, Any]]:
-        """
-        Lists WSL2 distributions.
+    def list_instances(self) -> builtins.list[dict[str, Any]]:
+        """Lists WSL2 distributions.
+
+        Replaces the historic ``list()`` name. A compatibility shim is added
+        below to preserve the original API.
         """
         try:
             result = self._run_command([self._get_wsl_binary(), "--list", "--verbose"])
@@ -163,6 +163,26 @@ class Provider(LocalBaseManager):
             return vms
         except Exception:
             return []
+
+    # ---------------------------------------------------------------------
+    # Compatibility shim – older callers may still reference ``list``.
+    # ---------------------------------------------------------------------
+    def list(self, *args, **kwargs) -> builtins.list[dict[str, Any]]:
+        """Legacy alias that forwards to :py:meth:`list_instances`.
+
+        The provider now uses ``list_instances`` as the primary method for
+        retrieving distributions. This shim maintains backward compatibility with
+        existing test suites and external code that still calls ``list``.
+        """
+        return self.list_instances(*args, **kwargs)
+
+    def get_console(self, vm_name: str, console_type: str = "text", **kwargs) -> str | None:
+        """WSL2 does not provide a direct console; raise ``ProviderFeatureNotSupported``.
+
+        Mirrors other local providers that raise this exception to trigger SSH fallback.
+        """
+        raise ProviderFeatureNotSupported(self.cloud_name, f"console:{console_type}")
+
 
     def login(self, name: str | None = None) -> bool:
         """
@@ -306,8 +326,8 @@ class Provider(LocalBaseManager):
         if not name or not self.exists(name):
             raise VMResourceError(f"Distribution {name} not found")
 
-        # Reuse list() to get the distributions and their states.
-        vms = self.list()
+        # Reuse list_instances() to get the distributions and their states.
+        vms = self.list_instances()
         for vm in vms:
             if vm["name"] == name:
                 return {

@@ -172,5 +172,21 @@ class Provider(LibcloudManager):
             logger.error(f"Error resetting Azure VM {name}: {e}")
             return False
 
+    # ---------------------------------------------------------------------
+    # Console handling – Azure does not provide a simple text console via the
+    # libcloud driver used in this repository.  Raising ``ProviderFeatureNotSupported``
+    # signals the CLI to fall back to SSH access, matching the behaviour of other
+    # providers that cannot expose a console endpoint.
+    # ---------------------------------------------------------------------
+    def get_console(self, vm_name: str, console_type: str = "text", **kwargs) -> str | None:
+        """Return a console URL or plain‑text output for an Azure VM.
+
+        Currently this implementation does not retrieve any console
+        information and always raises ``ProviderFeatureNotSupported``.  The
+        abstract method requirement is satisfied, and additional logic can be
+        added later if Azure console support becomes necessary.
+        """
+        raise ProviderFeatureNotSupported(self.cloud_name, f"console:{console_type}")
+
 # Compatibility alias for matrix tests and historic imports.
 AzureManager = Provider

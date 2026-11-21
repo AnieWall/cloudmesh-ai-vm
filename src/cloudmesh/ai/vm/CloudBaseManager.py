@@ -117,9 +117,13 @@ class CloudBaseManager(BaseVMProvider, ABC):
         """Deletes a VM."""
         return super().delete(name)
 
-    def list(self) -> list[dict[str, Any]]:
-        """Lists all VMs managed by this provider."""
-        return super().list()
+    def list_instances(self) -> list[dict[str, Any]]:
+        """Lists all VMs managed by this provider.
+
+        Delegates to the base ``BaseVMProvider.list_instances`` implementation.
+        """
+        return super().list_instances()
+
 
     def login(self, name: str | None = None) -> bool:
         """Logs into a VM."""
@@ -340,16 +344,14 @@ class CloudBaseManager(BaseVMProvider, ABC):
     # ---------------------------------------------------------------------
     # Console handling – providers must implement this to expose a VM console.
     # ---------------------------------------------------------------------
-    @abstractmethod
     def get_console(self, vm_name: str, console_type: str = "text", **kwargs) -> str | None:
         """Return a console URL (for graphical consoles) or raw text output.
 
-        ``console_type`` can be:
-        * ``"text"`` – return a plain‑text console (e.g., OpenStack server console output
-          or AWS EC2 instance console output).
-        * ``"novnc"`` or ``"spice"`` – return a URL that a web‑browser or VNC client can open.
-
-        Providers that cannot satisfy the requested console type must raise
-        ``ProviderFeatureNotSupported`` (imported from ``cloudmesh.ai.vm.exceptions``).
+        This default implementation signals that the provider does not support a
+        console endpoint by raising ``ProviderFeatureNotSupported``.  Concrete
+        provider subclasses (e.g., ``AwsManager``, ``OpenstackManager``) override
+        this method with provider‑specific behaviour.
         """
-        raise NotImplementedError
+        from cloudmesh.ai.vm.exceptions import ProviderFeatureNotSupported
+
+        raise ProviderFeatureNotSupported(self.cloud_name, f"console:{console_type}")

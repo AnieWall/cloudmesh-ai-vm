@@ -73,7 +73,7 @@ class Provider(LocalBaseManager):
         except Exception as e:
             raise VMProviderError(f"Failed to delete VirtualBox VM {name}: {e}")
 
-    def list(self) -> builtins.list[dict[str, Any]]:
+    def list_instances(self) -> builtins.list[dict[str, Any]]:
         """Lists VirtualBox VMs.
 
         The method parses the output of ``VBoxManage list vms`` which follows the
@@ -100,6 +100,19 @@ class Provider(LocalBaseManager):
             return vms
         except Exception as e:
             raise VMProviderError(f"Error listing VirtualBox VMs: {e}")
+
+    # ---------------------------------------------------------------------
+    # Compatibility shim – earlier code and tests may still call ``list``.
+    # ---------------------------------------------------------------------
+    def list(self, *args, **kwargs) -> builtins.list[dict[str, Any]]:
+        """Legacy alias forwarding to ``list_instances``.
+
+        The provider now implements ``list_instances`` as the canonical method.
+        This shim retains backward compatibility for callers that still expect a
+        ``list`` method.
+        """
+        return self.list_instances(*args, **kwargs)
+
 
     def login(self, name: str | None = None) -> bool:
         """VirtualBox does not provide a login operation; return True for API compatibility."""

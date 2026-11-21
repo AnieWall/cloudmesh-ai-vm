@@ -408,8 +408,12 @@ class Provider(LocalBaseManager):
             {"name": "large", "cpu": 4, "ram": "4GiB", "disk": "20GiB"},
         ]
 
-    def list(self) -> builtins.list[dict[str, Any]]:
-        """Lists all Multipass VMs."""
+    def list_instances(self) -> builtins.list[dict[str, Any]]:
+        """Lists all Multipass VMs.
+
+        This replaces the historic ``list()`` method name. A compatibility shim
+        ``list`` is provided below.
+        """
         try:
             import json
 
@@ -424,14 +428,27 @@ class Provider(LocalBaseManager):
                         "name": item.get("name"),
                         "status": item.get("state"),
                         "image": item.get("release") or "",
-                        # Return None for missing or empty IPv4 entries
-                         # Return empty string for missing IPv4 entries (to avoid literal "None")
-                         "ip": item.get("ipv4")[0] if item.get("ipv4") else "",
+                        # Return empty string for missing IPv4 entries (to avoid literal "None")
+                        "ip": item.get("ipv4")[0] if item.get("ipv4") else "",
                     }
                 )
             return vms
         except Exception as e:
             raise VMProviderError(f"Error listing Multipass VMs: {e}")
+
+    # ---------------------------------------------------------------------
+    # Compatibility shim – older code and tests may still call ``list``.
+    # ---------------------------------------------------------------------
+    def list(self, *args, **kwargs) -> builtins.list[dict[str, Any]]:
+        """Return the list of VMs using the legacy ``list`` name.
+
+        The provider now implements ``list_instances`` as the canonical method.
+        This shim simply forwards the call to maintain backward compatibility
+        with existing test suites and downstream code that still expects a
+        ``list`` method.
+        """
+        return self.list_instances(*args, **kwargs)
+
     def info(self, name: str | None = None, kind: str = "vm") -> dict[str, Any]:
         """Gets detailed information about a Multipass VM.
 

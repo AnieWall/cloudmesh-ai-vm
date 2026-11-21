@@ -249,9 +249,11 @@ class LibcloudManager(CloudBaseManager, ABC):
             logger.error(f"Error deleting VM {name} in {self.cloud_name}: {e}")
             return False
 
-    def list(self) -> builtins.list[dict[str, Any]]:
-        """
-        Lists all VMs using libcloud.
+    def list_instances(self) -> builtins.list[dict[str, Any]]:
+        """Lists all VMs using libcloud.
+
+        This replaces the older ``list()`` method. A compatibility shim ``list``
+        is provided below.
         """
         try:
             nodes = self.driver.list_nodes()
@@ -266,6 +268,7 @@ class LibcloudManager(CloudBaseManager, ABC):
         except Exception as e:
             logger.error(f"Error listing VMs in {self.cloud_name}: {e}")
             return []
+
 
     def info(self, name: str | None = None, kind: str = "vm") -> dict[str, Any]:
         """

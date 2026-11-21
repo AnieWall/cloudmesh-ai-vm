@@ -95,7 +95,7 @@ class LocalBaseManager(CloudBaseManager, ABC):
         """
         Checks if a VM exists by searching the list of all VMs.
         """
-        vms = self.list()
+        vms = self.list_instances()
         if not vms:
             return False
 

@@ -70,7 +70,7 @@ def test_delete_success(provider):
 def test_list_parsing(provider):
     mock_output = '"VM 1" {uuid1}\n"VM 2" {uuid2}\n'
     provider._run_command.return_value = MagicMock(stdout=mock_output, returncode=0)
-    vms = provider.list()
+    vms = provider.list_instances()
 
     assert len(vms) == 2
 

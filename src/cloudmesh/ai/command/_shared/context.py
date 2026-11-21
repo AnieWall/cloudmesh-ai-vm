@@ -133,7 +133,7 @@ def resolve_vm_name(ctx: click.Context, name: str | None) -> str:
 
     # 2. Fallback: If there's exactly one active VM, use it
     try:
-        all_vms = provider.list()
+        all_vms = provider.list_instances()
         active_vms = [
             vm["name"]
             for vm in all_vms

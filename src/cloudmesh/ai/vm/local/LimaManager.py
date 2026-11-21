@@ -5,6 +5,7 @@ from typing import Any, List, Dict
 from cloudmesh.ai.vm.exceptions import (
     VMProviderError,
     VMResourceError,
+    ProviderFeatureNotSupported,
 )
 
 from ..LocalBaseManager import LocalBaseManager
@@ -183,7 +184,7 @@ class Provider(LocalBaseManager):
             return []
 
 
-    def list(self) -> builtins.list[dict[str, Any]]:
+    def list_instances(self) -> builtins.list[dict[str, Any]]:
         """Lists Lima VMs.
 
         The method runs ``limactl list`` (no explicit ``-f json`` flag).  If the
@@ -245,14 +246,27 @@ class Provider(LocalBaseManager):
                     vms.append(vm)
                 return vms
         except Exception as e:
-            self.print(f"DEBUG: LimaManager.list - Exception occurred: {e}")
+            self.print(f"DEBUG: LimaManager.list_instances - Exception occurred: {e}")
             return []
+
+    # ---------------------------------------------------------------------
+    # Compatibility shim – older code may still reference ``list``.
+    # ---------------------------------------------------------------------
+    def list(self, *args, **kwargs) -> builtins.list[dict[str, Any]]:
+        """Legacy alias for ``list_instances``.
+
+        Provides backward compatibility for callers that expect a ``list``
+        method on the provider. All positional and keyword arguments are
+        forwarded to ``list_instances`` (which currently ignores them).
+        """
+        return self.list_instances(*args, **kwargs)
+
 
 
     def exists(self, name: str) -> bool:
         """Checks if a Lima VM exists."""
-        # ``self.list()`` may return ``None`` when no instance is found; treat it as empty.
-        vms = self.list() or []
+        # ``self.list_instances()`` may return ``None`` when no instance is found; treat it as empty.
+        vms = self.list_instances() or []
         for vm in vms:
             if isinstance(vm, dict):
                 vm_name = vm.get("name")
@@ -260,6 +274,13 @@ class Provider(LocalBaseManager):
                     return True
         return False
 
+    def get_console(self, vm_name: str, console_type: str = "text", **kwargs) -> str | None:
+        """Lima does not provide a direct console; raise ``ProviderFeatureNotSupported``.
+
+        This mirrors the behaviour of other local providers (e.g., ``VBoxManager``)
+        which raise the same exception to signal that the CLI should fall back to SSH.
+        """
+        raise ProviderFeatureNotSupported(self.cloud_name, f"console:{console_type}")
 
     def run_command(self, name: str, cmd: str) -> str:
         """Runs a command in a Lima VM."""
@@ -391,7 +412,7 @@ class Provider(LocalBaseManager):
         if not vm_name:
             raise VMResourceError("No VM name provided and no default VM found.")
 
-        vms = self.list() or []
+        vms = self.list_instances() or []
         vm = next(
             (
                 entry for entry in vms
@@ -448,7 +469,7 @@ class Provider(LocalBaseManager):
         start_time = time.time()
 
         while time.time() - start_time < timeout:
-            vms = self.list() or []
+            vms = self.list_instances() or []
             vm = next((v for v in vms if isinstance(v, dict) and v.get("name") == name), None)
             if vm:
                 # Lima's list() returns lower-case keys. We normalize status.
@@ -471,7 +492,7 @@ class Provider(LocalBaseManager):
         if not vm_name:
             raise VMResourceError("No VM name provided and no default VM found.")
 
-        vms = self.list() or []
+        vms = self.list_instances() or []
         for vm in vms:
             if (
                 isinstance(vm, dict)

@@ -217,7 +217,7 @@ class TestLibcloudProviders:
             mock_driver.destroy_node.assert_called_once_with(created_node)
 
             # Test List
-            vms = provider.list()
+            vms = provider.list_instances()
             assert len(vms) == 2
             assert {vm["Name"] for vm in vms} == {
                 "existing-vm",
