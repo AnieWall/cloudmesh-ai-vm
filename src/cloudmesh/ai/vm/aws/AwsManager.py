@@ -371,6 +371,81 @@ class Provider(LibcloudManager):
                 address.ip,
             )
             return True
+        allocation_id = address.extra["allocation_id"]
+        try:
+            released = bool(
+                self.driver.ex_release_address(
+                    elastic_ip=address,
+                    domain="vpc",
+                )
+            )
+        except Exception:
+            logger.exception(
+                "Failed to release AWS Elastic IP allocation %s after "
+                "disassociation; manual recovery may be required",
+                allocation_id,
+            )
+            raise
+        if not released:
+            logger.error(
+                "Failed to release AWS Elastic IP allocation %s after "
+                "disassociation; manual recovery may be required",
+                allocation_id,
+            )
+        return released
+
+    def release_elastic_ip_allocation(self, allocation_id: str) -> bool:
+        """Release an unassociated, Cloudmesh-managed AWS Elastic IP.
+
+        This provides explicit recovery when VM-based release succeeded in
+        disassociating an Elastic IP but failed to release its allocation.
+
+        The allocation ID must be supplied explicitly. Associated or
+        unmanaged allocations are never released by this method.
+        """
+        if not allocation_id:
+            raise ValueError("An Elastic IP allocation ID is required")
+
+        addresses = self.driver.ex_describe_all_addresses(
+            only_associated=False
+        )
+        matches = [
+            address for address in addresses
+            if address.extra.get("allocation_id") == allocation_id
+        ]
+
+        if not matches:
+            return False
+
+        if len(matches) != 1:
+            raise RuntimeError(
+                f"Multiple Elastic IP records match allocation {allocation_id}"
+            )
+
+        address = matches[0]
+
+        if address.domain != "vpc":
+            raise RuntimeError(
+                f"Elastic IP allocation {allocation_id} is not VPC-scoped"
+            )
+
+        if (
+            address.instance_id
+            or address.extra.get("association_id")
+            or address.extra.get("interface_id")
+            or address.extra.get("private_ip")
+        ):
+            raise RuntimeError(
+                f"Elastic IP allocation {allocation_id} is still associated; "
+                "refusing to release it"
+            )
+
+        if not self._is_managed_elastic_ip(address):
+            raise RuntimeError(
+                f"Elastic IP allocation {allocation_id} is not managed "
+                "by cloudmesh-ai-vm; refusing to release it"
+            )
+
         return bool(
             self.driver.ex_release_address(
                 elastic_ip=address,

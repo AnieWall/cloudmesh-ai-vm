@@ -567,6 +567,232 @@ class TestAwsElasticIP:
         provider.driver.ex_release_address.assert_not_called()
 
 
+    def test_allocation_release_exception_logs_recovery_id(
+        self, provider_and_resources, caplog
+    ):
+        """An AWS release exception must preserve the recovery identifier."""
+        provider, node, address = provider_and_resources
+        provider.driver.ex_describe_all_addresses.return_value = [address]
+        provider.driver.ex_disassociate_address.return_value = True
+        provider.driver.ex_release_address.side_effect = RuntimeError(
+            "Simulated AWS release failure"
+        )
+
+        with patch.object(provider, "_find_node", return_value=node):
+            with caplog.at_level("ERROR", logger="cloudmesh.ai.vm"):
+                with pytest.raises(
+                    RuntimeError, match="Simulated AWS release failure"
+                ):
+                    provider.release_floating_ip(node.id)
+
+        assert "eipalloc-123" in caplog.text
+        provider.driver.ex_disassociate_address.assert_called_once()
+        provider.driver.ex_release_address.assert_called_once()
+
+    def test_failed_allocation_release_logs_recovery_id(
+        self, provider_and_resources, caplog
+    ):
+        """A partial release failure must expose the allocation ID in logs."""
+        provider, node, address = provider_and_resources
+        provider.driver.ex_describe_all_addresses.return_value = [address]
+        provider.driver.ex_disassociate_address.return_value = True
+        provider.driver.ex_release_address.return_value = False
+
+        with patch.object(provider, "_find_node", return_value=node):
+            with caplog.at_level("ERROR", logger="cloudmesh.ai.vm"):
+                assert provider.release_floating_ip(node.id) is False
+
+        assert "eipalloc-123" in caplog.text
+
+    def test_release_failure_cannot_be_retried_by_vm_name(
+        self, provider_and_resources
+    ):
+        """A failed release leaves no associated address for a VM-name retry."""
+        provider, node, address = provider_and_resources
+
+        provider.driver.ex_describe_all_addresses.side_effect = [
+            [address],
+            [],
+        ]
+        provider.driver.ex_disassociate_address.return_value = True
+        provider.driver.ex_release_address.return_value = False
+
+        with patch.object(provider, "_find_node", return_value=node):
+            first_result = provider.release_floating_ip(node.id)
+            retry_result = provider.release_floating_ip(node.id)
+
+        assert first_result is False
+        assert retry_result is False
+        assert provider.driver.ex_describe_all_addresses.call_count == 2
+        provider.driver.ex_disassociate_address.assert_called_once()
+        provider.driver.ex_release_address.assert_called_once_with(
+            elastic_ip=address,
+            domain="vpc",
+        )
+
+
+    @pytest.mark.parametrize(
+        "association_field",
+        ["instance_id", "association_id", "interface_id", "private_ip"],
+    )
+    def test_recovery_refuses_associated_allocation(
+        self, provider_and_resources, association_field
+    ):
+        """Recovery must never release an associated Elastic IP."""
+        provider, _, address = provider_and_resources
+        address.instance_id = None
+        address.extra = {
+            "allocation_id": "eipalloc-123",
+            "association_id": None,
+            "interface_id": None,
+            "private_ip": None,
+        }
+
+        if association_field == "instance_id":
+            address.instance_id = "i-123456"
+        else:
+            address.extra[association_field] = "associated-resource"
+
+        provider.driver.ex_describe_all_addresses.return_value = [address]
+
+        with pytest.raises(RuntimeError, match="associated"):
+            provider.release_elastic_ip_allocation("eipalloc-123")
+
+        provider.driver.ex_release_address.assert_not_called()
+
+    def test_recovery_rejects_unmanaged_allocation(
+        self, provider_and_resources
+    ):
+        provider, _, address = provider_and_resources
+        address.instance_id = None
+        address.extra["association_id"] = None
+        provider.driver.ex_describe_all_addresses.return_value = [address]
+        provider.driver.ex_describe_tags.return_value = {}
+
+        with pytest.raises(RuntimeError, match="managed"):
+            provider.release_elastic_ip_allocation("eipalloc-123")
+
+        provider.driver.ex_release_address.assert_not_called()
+
+    def test_recovery_releases_exact_unassociated_allocation(
+        self, provider_and_resources
+    ):
+        provider, _, address = provider_and_resources
+        address.instance_id = None
+        address.extra = {
+            "allocation_id": "eipalloc-123",
+            "association_id": None,
+            "interface_id": None,
+            "private_ip": None,
+        }
+        provider.driver.ex_describe_all_addresses.return_value = [address]
+        provider.driver.ex_release_address.return_value = True
+
+        assert provider.release_elastic_ip_allocation("eipalloc-123") is True
+
+        provider.driver.ex_release_address.assert_called_once_with(
+            elastic_ip=address,
+            domain="vpc",
+        )
+
+    def test_recovery_releases_only_requested_allocation(
+        self, provider_and_resources
+    ):
+        """Recovery must select the exact allocation ID."""
+        provider, _, requested = provider_and_resources
+        requested.instance_id = None
+        requested.extra = {
+            "allocation_id": "eipalloc-123",
+            "association_id": None,
+            "interface_id": None,
+            "private_ip": None,
+        }
+
+        other = MagicMock()
+        other.ip = "203.0.113.20"
+        other.domain = "vpc"
+        other.instance_id = None
+        other.extra = {
+            "allocation_id": "eipalloc-456",
+            "association_id": None,
+            "interface_id": None,
+            "private_ip": None,
+        }
+
+        provider.driver.ex_describe_all_addresses.return_value = [
+            other, requested
+        ]
+        provider.driver.ex_release_address.return_value = True
+
+        assert provider.release_elastic_ip_allocation("eipalloc-123") is True
+
+        provider.driver.ex_release_address.assert_called_once_with(
+            elastic_ip=requested,
+            domain="vpc",
+        )
+
+    def test_recovery_release_failure_returns_false(
+        self, provider_and_resources
+    ):
+        """A failed recovery must preserve the failure result."""
+        provider, _, address = provider_and_resources
+        address.instance_id = None
+        address.extra = {
+            "allocation_id": "eipalloc-123",
+            "association_id": None,
+            "interface_id": None,
+            "private_ip": None,
+        }
+
+        provider.driver.ex_describe_all_addresses.return_value = [address]
+        provider.driver.ex_release_address.return_value = False
+
+        assert provider.release_elastic_ip_allocation("eipalloc-123") is False
+
+        provider.driver.ex_release_address.assert_called_once_with(
+            elastic_ip=address,
+            domain="vpc",
+        )
+
+    def test_recovery_release_exception_propagates(
+        self, provider_and_resources
+    ):
+        """Recovery must preserve AWS errors without retrying."""
+        provider, _, address = provider_and_resources
+        address.instance_id = None
+        address.extra = {
+            "allocation_id": "eipalloc-123",
+            "association_id": None,
+            "interface_id": None,
+            "private_ip": None,
+        }
+
+        provider.driver.ex_describe_all_addresses.return_value = [address]
+        provider.driver.ex_release_address.side_effect = RuntimeError(
+            "Simulated AWS recovery failure"
+        )
+
+        with pytest.raises(
+            RuntimeError, match="Simulated AWS recovery failure"
+        ):
+            provider.release_elastic_ip_allocation("eipalloc-123")
+
+        provider.driver.ex_release_address.assert_called_once_with(
+            elastic_ip=address,
+            domain="vpc",
+        )
+
+    def test_recovery_missing_allocation(
+        self, provider_and_resources
+    ):
+        provider, _, _ = provider_and_resources
+        provider.driver.ex_describe_all_addresses.return_value = []
+
+        assert provider.release_elastic_ip_allocation("eipalloc-missing") is False
+
+        provider.driver.ex_release_address.assert_not_called()
+
+
 class TestAwsEC2Creation:
     """Mocked validation tests for AWS EC2 instance creation."""
 
