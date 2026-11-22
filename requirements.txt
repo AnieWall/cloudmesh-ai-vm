@@ -37,7 +37,7 @@ bqplot==0.13.1
     # via ipydatagrid
 bqscales==0.3.7
     # via bqplot
-40 | chameleon-ccauth @ git+https://github.com/ChameleonCloud/ccauth.git
+chameleon-ccauth @ git+https://github.com/ChameleonCloud/ccauth.git
     # via cloudmesh-ai-vm (pyproject.toml)
 certifi==2026.10.23
     # via
