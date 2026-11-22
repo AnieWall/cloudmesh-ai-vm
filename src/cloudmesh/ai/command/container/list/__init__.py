@@ -8,7 +8,7 @@ from cloudmesh.ai.command._shared.context import console
 def list_containers(ctx: click.Context):
     """List all Docker containers."""
     manager = ctx.obj
-    containers = manager.list()
+    containers = manager.list_instances()
     if not containers:
         console.print("[yellow]No containers found.[/yellow]")
         return

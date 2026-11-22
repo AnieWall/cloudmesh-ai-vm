@@ -88,11 +88,11 @@ def _run_core_logic(provider):
 
     with patch.object(provider, "exists", return_value=True):
         assert provider.exists(vm_id) is True
-
     with patch.object(
-        provider, "info", return_value={"name": vm_id, "status": "running"}
+        provider,
+        "list_instances", return_value=[{"name": "test-vm", "status": "running"}]
     ):
-        info = provider.info(vm_id)
+        vms = provider.list_instances()
         assert info["name"] == vm_id
         assert info["status"] == "running"
 
@@ -138,9 +138,9 @@ def _run_discovery_logic(provider, cloud_name):
 
     # 2. Inventory
     with patch.object(
-        provider, "list", return_value=[{"name": "test-vm", "status": "running"}]
+        provider, "list_instances", return_value=[{"name": "test-vm", "status": "running"}]
     ):
-        vms = provider.list()
+        vms = provider.list_instances()
         assert len(vms) == 1
         assert vms[0]["name"] == "test-vm"
         assert "name" in vms[0]

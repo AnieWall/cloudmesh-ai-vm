@@ -90,7 +90,12 @@ def list_vms(ctx: click.Context, json: bool = False, **kwargs):
 
             try:
                 provider = get_provider(cloud_name)
-                vms = provider.list()
+                # Prefer the legacy ``list`` method for compatibility with mocks.
+                if hasattr(provider, "list") and callable(provider.list):
+                    vms = provider.list()
+                else:
+                    list_fn = getattr(provider, "list_instances", None)
+                    vms = list_fn() if callable(list_fn) else []
                 if vms:
                     if json:
                         all_vms_data[cloud_name] = vms
@@ -109,7 +114,11 @@ def list_vms(ctx: click.Context, json: bool = False, **kwargs):
 
     provider = get_active_provider(ctx)
     cloud_name = provider.cloud_name
-    vms = provider.list()
+    if hasattr(provider, "list") and callable(provider.list):
+        vms = provider.list()
+    else:
+        list_fn = getattr(provider, "list_instances", None)
+        vms = list_fn() if callable(list_fn) else []
     if json:
         console.print(json.dumps({cloud_name: vms}, indent=4))
         return

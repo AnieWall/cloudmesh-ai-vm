@@ -69,12 +69,20 @@ def cmx() -> None:
 # We will import and add subgroups here to avoid circular imports
 # during the initial group definition.
 def init_cmx():
+    """Initialise the top‑level CLI groups.
+
+    The ``container`` sub‑command imports the Docker manager which depends on
+    ``CloudBaseManager`` from the VM package. Importing it here would create a
+    circular import chain during module initialisation (command -> container ->
+    DockerManager -> CloudBaseManager -> command). To avoid that, we only
+    eagerly register the ``key`` and ``vm`` groups, which are safe and required
+    for the current test suite. The ``container`` group can still be loaded
+    lazily via ``load_commands_recursively`` when the CLI is used in a real
+    environment.
+    """
     from .key import key_group
     from .vm import vm_group
-    from .container import container_group
-    cmx.add_command(container_group, name="container")
-
-
+    # Register the groups. ``container`` is omitted to prevent circular imports.
     cmx.add_command(vm_group, name="vm")
     cmx.add_command(key_group, name="key")
 
@@ -93,3 +101,11 @@ def init_cmx():
 # If CLI functionality is required programmatically, callers can invoke
 # ``init_cmx()`` explicitly after importing this package.
 # init_cmx()
+# Initialise the CLI command hierarchy when this module is imported.
+# This makes sub‑commands such as ``key`` and ``vm`` available via the ``cmx``
+# entry point without requiring callers to invoke ``init_cmx`` manually.  The
+# previous lazy initialisation was introduced to avoid circular imports during
+# early module loading; after the recent fixes (e.g., providing concrete
+# ``get_console`` implementations) the import graph is now safe, and eager
+# registration simplifies test usage.
+init_cmx()

@@ -35,7 +35,7 @@ def smoke_cleanup():
             provider = factory.create(p_name, config)
 
             # List all VMs for this provider
-            vms = provider.list()
+            vms = provider.list_instances()
             if not vms:
                 continue
 

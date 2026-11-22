@@ -22,6 +22,7 @@ MOCK_CONFIG = {
         },
         "google": {
             "project_id": "test-project",
+            "service_account_email": "test@example.iam.gserviceaccount.com",
             "private_key": "/path/to/key.json",
         },
     }
@@ -33,6 +34,15 @@ class TestHyperscalers:
     Unit tests for AWS, Azure, and Google providers.
     Focuses on provider-specific overrides.
     """
+
+    @pytest.fixture(autouse=True)
+    def mock_cloud_drivers(self):
+        """Prevent real Azure and Google authentication in unit tests."""
+        with (
+            patch("cloudmesh.ai.vm.azure.AzureManager.AzureDriver"),
+            patch("cloudmesh.ai.vm.google.GoogleManager.GCEDriver"),
+        ):
+            yield
 
     # --- AWS Tests ---
     @patch("cloudmesh.ai.vm.aws.AwsManager.get_driver")
@@ -68,8 +78,8 @@ class TestHyperscalers:
         mock_driver_class.assert_called_once_with(
             tenant_id="test-tenant",
             subscription_id="test-sub",
-            client_id="test-client",
-            client_secret="test-secret",
+            key="test-client",
+            secret="test-secret",
         )
         assert provider.cloud_name == "azure"
 
@@ -88,7 +98,10 @@ class TestHyperscalers:
         provider = GoogleProvider(MOCK_CONFIG)
 
         mock_driver_class.assert_called_once_with(
-            project_id="test-project", private_key="/path/to/key.json"
+            user_id="test@example.iam.gserviceaccount.com",
+            key="/path/to/key.json",
+            project="test-project",
+            auth_type="SA",
         )
         assert provider.cloud_name == "google"
 
@@ -115,8 +128,10 @@ class TestHyperscalers:
 
         # Mock the node to return 'running' status
         mock_node = MagicMock()
+        mock_node.name = "test-vm"
         mock_node.state = "running"
         provider.driver.get_node.return_value = mock_node
+        provider.driver.list_nodes.return_value = [mock_node]
 
         assert (
             provider.wait_for_status(name="test-vm", target_status="running", timeout=1)
@@ -132,8 +147,10 @@ class TestHyperscalers:
 
         # Mock the node to always return 'stopped'
         mock_node = MagicMock()
+        mock_node.name = "test-vm"
         mock_node.state = "stopped"
         provider.driver.get_node.return_value = mock_node
+        provider.driver.list_nodes.return_value = [mock_node]
 
         # Short timeout for testing
         assert (

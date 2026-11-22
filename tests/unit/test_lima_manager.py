@@ -104,7 +104,7 @@ def test_list_parsing(provider):
     )
     provider._run_command.return_value = MagicMock(stdout=mock_output, returncode=0)
 
-    vms = provider.list()
+    vms = provider.list_instances()
 
     assert len(vms) == 2
     assert vms[0]["name"] == "vm-1"

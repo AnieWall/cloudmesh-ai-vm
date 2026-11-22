@@ -6,7 +6,10 @@ from types import SimpleNamespace
 from typing import Any
 
 from cloudmesh.ai.vm.LibcloudManager import LibcloudManager
-from cloudmesh.ai.vm.exceptions import ProviderFeatureNotSupported
+from cloudmesh.ai.vm.exceptions import (
+    ProviderFeatureNotSupported,
+    VMProviderError,
+)
 
 from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider as LibcloudProvider
@@ -30,19 +33,8 @@ class Provider(LibcloudManager):
         )
 
     def _find_node(self, identifier: str):
-        """Helper to find a node by name or ID since some driver versions lack get_node."""
-        try:
-            if hasattr(self.driver, "get_node"):
-                node = self.driver.get_node(identifier)
-                if node:
-                    return node
-        except Exception:
-            pass
-
-        nodes = self.driver.list_nodes()
-        return next(
-            (n for n in nodes if n.name == identifier or n.id == identifier), None
-        )
+        """Resolve an AWS instance using the shared name-first lookup."""
+        return self.get_vm(identifier)
 
     def start(
         self,
@@ -281,7 +273,11 @@ class Provider(LibcloudManager):
                         "Cannot verify Elastic IP %s; manual reconciliation required",
                         address.ip,
                     )
-                elif current.instance_id:
+                elif (
+                    current.instance_id
+                    or current.extra.get("association_id")
+                    or current.extra.get("interface_id")
+                ):
                     logger.error(
                         "Elastic IP %s is associated; manual cleanup required",
                         address.ip,
@@ -302,17 +298,26 @@ class Provider(LibcloudManager):
                 )
             raise
 
-    def release_floating_ip(self, name: str) -> bool:
-        """Disassociate an Elastic IP; always release its allocation.
+    def release_floating_ip(self, name: str, release_allocation: bool = True) -> bool:
+        """Disassociate an Elastic IP from an EC2 instance.
 
-        The base ``BaseVMProvider`` defines ``release_floating_ip(self, name: str) -> bool``.
-        The ``release_allocation`` flag is not part of the public API and caused a
-        signature mismatch. We now always release the allocation (the original
-        default behavior) and remove the parameter to stay compatible with the
-        base class.
+        Parameters
+        ----------
+        name: str
+            The name or identifier of the EC2 instance.
+        release_allocation: bool, optional
+            When ``True`` (default) the Elastic IP allocation is also released
+            after successful disassociation via ``ex_release_address``.  When
+            ``False`` only the disassociation (`ex_disassociate_address`) is
+            performed, leaving the allocation allocated for future reuse.
+
+        The original implementation always released the allocation and did not
+        expose a ``release_allocation`` argument, which caused a ``TypeError``
+        in the test suite.  This method now respects the flag while preserving
+        the existing validation and ownership‑check logic.
         """
-        # Preserve original behaviour: always release the allocation.
-        release_allocation = True
+        # The ``release_allocation`` flag is now a public argument; the original
+        # comment about a signature mismatch is no longer applicable.
         node = self._find_node(name)
         if node is None:
             return False
@@ -355,6 +360,81 @@ class Provider(LibcloudManager):
                 address.ip,
             )
             return True
+        allocation_id = address.extra["allocation_id"]
+        try:
+            released = bool(
+                self.driver.ex_release_address(
+                    elastic_ip=address,
+                    domain="vpc",
+                )
+            )
+        except Exception:
+            logger.exception(
+                "Failed to release AWS Elastic IP allocation %s after "
+                "disassociation; manual recovery may be required",
+                allocation_id,
+            )
+            raise
+        if not released:
+            logger.error(
+                "Failed to release AWS Elastic IP allocation %s after "
+                "disassociation; manual recovery may be required",
+                allocation_id,
+            )
+        return released
+
+    def release_elastic_ip_allocation(self, allocation_id: str) -> bool:
+        """Release an unassociated, Cloudmesh-managed AWS Elastic IP.
+
+        This provides explicit recovery when VM-based release succeeded in
+        disassociating an Elastic IP but failed to release its allocation.
+
+        The allocation ID must be supplied explicitly. Associated or
+        unmanaged allocations are never released by this method.
+        """
+        if not allocation_id:
+            raise ValueError("An Elastic IP allocation ID is required")
+
+        addresses = self.driver.ex_describe_all_addresses(
+            only_associated=False
+        )
+        matches = [
+            address for address in addresses
+            if address.extra.get("allocation_id") == allocation_id
+        ]
+
+        if not matches:
+            return False
+
+        if len(matches) != 1:
+            raise RuntimeError(
+                f"Multiple Elastic IP records match allocation {allocation_id}"
+            )
+
+        address = matches[0]
+
+        if address.domain != "vpc":
+            raise RuntimeError(
+                f"Elastic IP allocation {allocation_id} is not VPC-scoped"
+            )
+
+        if (
+            address.instance_id
+            or address.extra.get("association_id")
+            or address.extra.get("interface_id")
+            or address.extra.get("private_ip")
+        ):
+            raise RuntimeError(
+                f"Elastic IP allocation {allocation_id} is still associated; "
+                "refusing to release it"
+            )
+
+        if not self._is_managed_elastic_ip(address):
+            raise RuntimeError(
+                f"Elastic IP allocation {allocation_id} is not managed "
+                "by cloudmesh-ai-vm; refusing to release it"
+            )
+
         return bool(
             self.driver.ex_release_address(
                 elastic_ip=address,
@@ -487,10 +567,9 @@ class Provider(LibcloudManager):
             raise VMProviderError(f"AWS instance {vm_name} not found")
 
         try:
-            # ``get_console_output`` returns a dict with an 'Output' key containing
-            # the (decoded) console string.
-            resp = self.client.get_console_output(InstanceId=node.id, Latest=True)
-            return resp.get("Output", "")
+            # Apache Libcloud returns decoded console text under "output".
+            resp = self.driver.ex_get_console_output(node)
+            return resp.get("output")
         except Exception as e:
             raise VMProviderError(f"Failed to retrieve console output for {vm_name}: {e}")
 

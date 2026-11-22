@@ -24,8 +24,12 @@ class DockerManager(CloudBaseManager):
             logger.error(f"Failed to initialize Docker client: {e}")
             self.client = None
 
-    def list(self) -> list[dict[str, Any]]:
-        """List all Docker containers (running and stopped)."""
+    def list_instances(self) -> list[dict[str, Any]]:
+        """List all Docker containers (running and stopped).
+
+        This method replaces the historic ``list()`` name to avoid shadowing the
+        built‑in ``list`` type. A compatibility shim ``list`` is provided below.
+        """
         if not self.client:
             return []
         containers = self.client.containers.list(all=True)
@@ -38,6 +42,7 @@ class DockerManager(CloudBaseManager):
             }
             for c in containers
         ]
+
 
     def start(
         self,

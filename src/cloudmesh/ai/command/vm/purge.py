@@ -78,7 +78,7 @@ def purge(ctx: click.Context, yes: bool = False, **kwargs) -> None:
         # -------------------------------------------------------
         # 1. VM Deletion
         # -------------------------------------------------------
-        vms = provider.list() if hasattr(provider, "list") else []
+        vms = provider.list_instances() if hasattr(provider, "list_instances") else []
         if vms:
             for vm in vms:
                 # Normalise name extraction across dicts and objects.

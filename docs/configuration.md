@@ -81,7 +81,7 @@ clouds:
 
 - `username`: Used as a prefix for automatically generated VM names (e.g., `gregor-0`). Underscores in the username are automatically replaced with hyphens to ensure compatibility with cloud providers.
 - `counter`: Tracks the number of VMs started. Incremented automatically on every `cmx vm start` without a name.
-- `default_cloud`: The provider used when no specific cloud is mentioned.
+84 | - `default_cloud`: The provider used when no specific cloud is mentioned. **Note**: If the `OS_CLOUD` environment variable is defined, it overrides this setting, allowing temporary cloud selection without modifying the YAML file.
 - `last_vm`: Tracks the name of the last VM successfully started. This allows lifecycle commands (stop, delete, etc.) to target the VM without specifying a name.
 
 ### Provider-Specific Fields

@@ -10,7 +10,8 @@ Gregor von Laszewski
     - **Contextual Memory**: The tool remembers the last used VM (the most recently started or accessed instance), allowing you to run commands like `cmx vm stop` without specifying a name.
 - **Provider Flexibility**:
     - **Default Cloud**: Manage your active provider via `cmx vm provider set <cloud>`.
-    - **Cloud Override**: Use the `--cloud` flag to temporarily use a different provider (e.g., `cmx vm start --cloud aws`).
+13 |     - **Cloud Override**: Use the `--cloud` flag to temporarily use a different provider (e.g., `cmx vm start --cloud aws`).
+14 |     - **OS_CLOUD Environment Variable**: If the `OS_CLOUD` environment variable is set, it overrides the default cloud from your `clouds.yaml` configuration. This enables scripts and CI pipelines to switch clouds without editing the configuration file.
  - **Floating IP Control**: The `cmx vm start` command now supports a `--noip` flag to start a VM without allocating a public floating IP, saving scarce IP resources.
  - **Floating IP Descriptions**: When a floating IP is allocated, its ``description`` field is set to the Cloudmesh username (or a generic placeholder) to aid in resource tracking and billing.
 - **Remote Execution**: Execute commands directly on your VMs using `cmx vm run <command>`.

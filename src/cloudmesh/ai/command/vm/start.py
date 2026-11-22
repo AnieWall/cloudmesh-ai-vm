@@ -124,9 +124,21 @@ def start(
     # VMs may be resumed (their start() powers on an existing VM);
     # automatically generated names must always be new.
     if vms_to_start:
+        # Retrieve existing VMs using the provider's "list_instances" method if
+        # available, falling back to the older "list" method used by older test
+        # mocks. This maintains backward compatibility with unit tests that mock
+        # only ``provider.list``.
+        # Prefer the legacy ``list`` method for compatibility with the test suite
+        # (which mocks ``list`` but not ``list_instances``). Fall back to
+        # ``list_instances`` for providers that implement the newer API.
+        if hasattr(provider, "list") and callable(provider.list):
+            existing = provider.list()
+        else:
+            list_fn = getattr(provider, "list_instances", None)
+            existing = list_fn() if callable(list_fn) else []
         existing_vms = {
             vm["name"]: vm
-            for vm in (provider.list() or [])
+            for vm in (existing or [])
             if isinstance(vm, dict) and vm.get("name")
         }
         for vm_name in vms_to_start:

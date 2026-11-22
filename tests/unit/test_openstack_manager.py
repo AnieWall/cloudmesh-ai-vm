@@ -1,3 +1,4 @@
+from pathlib import Path
 from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
@@ -43,6 +44,10 @@ def test_start_uses_configured_key_and_security_group(provider, mock_driver):
 
     # Mock wait_for_active to return True immediately
     with (
+        patch(
+            "cloudmesh.ai.vm.openstack.OpenstackManager.resolve_key_path",
+            return_value=(Path("/tmp/id_rsa.pub"), "id_rsa"),
+        ),
         patch.object(provider, "wait_for_active", return_value=True),
         patch.object(provider, "assign_floating_ip", return_value="1.2.3.4"),
         patch.object(provider, "wait_for_login", return_value=True),

@@ -33,14 +33,12 @@ dependencies = [
     "python-ironicclient",
     "python-swiftclient",
     "python-chi",
-    "paramiko",
-    "fabric",
     "chameleon-blazarclient @ git+https://github.com/ChameleonCloud/python-blazarclient.git",
     "chameleon-zunclient @ git+https://github.com/chameleoncloud/python-zunclient.git",
-    # NOTE: The `ccauth` library is still published under the name "ccauth".
-    # The PR attempted to rename it to "chameleon-ccauth", but that package does not exist and would break `pip install`.
-    # We keep the original name to ensure reliable installation.
-    "ccauth @ git+https://github.com/ChameleonCloud/ccauth.git",
+    # NOTE: The `ccauth` library is now published under the name "chameleon-ccauth".
+    # The original dependency "ccauth" caused a metadata mismatch during pip install.
+    # We therefore reference the package using its new install name.
+    "chameleon-ccauth @ git+https://github.com/ChameleonCloud/ccauth.git",
     "pre-commit",
     # Pin known vulnerable transitive dependencies to fixed versions (exact versions so Dependabot can resolve correctly)
     "certifi==2026.10.23",

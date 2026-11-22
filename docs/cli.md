@@ -15,7 +15,8 @@ cmx container <command> [options]
 
 The `vm` group supports the following global options:
 
-- `--cloud <cloud_name>`: Overrides the default cloud provider for the duration of the command. For example, `cmx vm start --cloud aws` will start a VM on AWS even if Multipass is your default.
+ 18 | - `--cloud <cloud_name>`: Overrides the default cloud provider for the duration of the command. For example, `cmx vm start --cloud aws` will start a VM on AWS even if Multipass is your default.
+ 19 | - `OS_CLOUD` environment variable: When set, it takes precedence over the `default_cloud` entry in `clouds.yaml`, effectively changing the active provider for all commands unless a `--cloud` flag is supplied.
 - `-i, --interactive`: Enters a dedicated interactive shell for VM management, showing the active provider in the prompt.
 
 ## Commands
