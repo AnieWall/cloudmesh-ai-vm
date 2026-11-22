@@ -128,8 +128,10 @@ class TestHyperscalers:
 
         # Mock the node to return 'running' status
         mock_node = MagicMock()
+        mock_node.name = "test-vm"
         mock_node.state = "running"
         provider.driver.get_node.return_value = mock_node
+        provider.driver.list_nodes.return_value = [mock_node]
 
         assert (
             provider.wait_for_status(name="test-vm", target_status="running", timeout=1)
@@ -145,8 +147,10 @@ class TestHyperscalers:
 
         # Mock the node to always return 'stopped'
         mock_node = MagicMock()
+        mock_node.name = "test-vm"
         mock_node.state = "stopped"
         provider.driver.get_node.return_value = mock_node
+        provider.driver.list_nodes.return_value = [mock_node]
 
         # Short timeout for testing
         assert (
