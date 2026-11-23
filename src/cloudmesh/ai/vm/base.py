@@ -94,7 +94,7 @@ class BaseVMProvider(ABC):
         raise ProviderFeatureNotSupported(self.cloud_name, "unshelve")
 
     # --- Inventory Methods ---
-    def list_instances(self) -> list[dict[str, Any]]:
+    def list_instances(self) -> List[dict[str, Any]]:
         """Lists all VMs in the cloud.
 
         This replaces the historic ``list()`` method to avoid shadowing the built‑in
@@ -103,23 +103,20 @@ class BaseVMProvider(ABC):
         """
         raise ProviderFeatureNotSupported(self.cloud_name, "list_instances")
 
-    def list(self, **kwargs) -> list[dict[str, Any]]:
-        """Compatibility shim – delegates to ``list_instances`` if not overridden."""
-        return self.list_instances(**kwargs)
 
     def get_console_connection_keys(self, vm: dict[str, Any]) -> dict[str, str] | None:
         """Retrieves connection details like SSH keys for a given VM."""
         raise ProviderFeatureNotSupported(self.cloud_name, "get_console_connection_keys")
 
-    def get_flavors(self, **kwargs) -> list[dict[str, Any]]:
+    def get_flavors(self, **kwargs) -> List[dict[str, Any]]:
         """Lists instance flavors/sizes."""
         raise ProviderFeatureNotSupported(self.cloud_name, "list_flavors")
 
-    def get_images(self, **kwargs) -> list[dict[str, Any]]:
+    def get_images(self, **kwargs) -> List[dict[str, Any]]:
         """Lists available VM images."""
         raise ProviderFeatureNotSupported(self.cloud_name, "list_images")
 
-    def get_keys(self) -> list[dict[str, Any]]:
+    def get_keys(self) -> List[dict[str, Any]]:
         """Lists available SSH keys."""
         raise ProviderFeatureNotSupported(self.cloud_name, "list_keys")
 
@@ -134,7 +131,7 @@ class BaseVMProvider(ABC):
         """
         raise ProviderFeatureNotSupported(self.cloud_name, "delete_key")
 
-    def get_security_groups(self) -> list[dict[str, Any]]:
+    def get_security_groups(self) -> List[dict[str, Any]]:
         """Lists available security groups."""
         raise ProviderFeatureNotSupported(self.cloud_name, "get_security_groups")
 
@@ -173,12 +170,12 @@ class BaseVMProvider(ABC):
         """Removes a specific rule from a security group using its ID."""
         raise ProviderFeatureNotSupported(self.cloud_name, "remove_security_group_rule")
 
-    def list_security_group_rules(self, sg_name: str) -> list[dict[str, Any]]:
+    def list_security_group_rules(self, sg_name: str) -> List[dict[str, Any]]:
         """Lists all rules for a specific security group."""
         raise ProviderFeatureNotSupported(self.cloud_name, "list_security_group_rules")
 
     # --- Network Methods ---
-    def list_regions(self) -> list[dict[str, Any]]:
+    def list_regions(self) -> List[dict[str, Any]]:
         """Lists available regions."""
         raise ProviderFeatureNotSupported(self.cloud_name, "list_regions")
 
@@ -186,11 +183,38 @@ class BaseVMProvider(ABC):
         """Assigns a floating IP to the VM."""
         raise ProviderFeatureNotSupported(self.cloud_name, "assign_floating_ip")
 
-    def release_floating_ip(self, name: str) -> bool:
-        """Releases a floating IP from the VM."""
+    def release_floating_ip(self, name: str, release_allocation: bool = True) -> bool:
+        """Releases a floating IP from the VM.
+
+        Parameters
+        ----------
+        name: str
+            The identifier of the VM whose floating IP should be released.
+        release_allocation: bool, optional
+            When ``True`` (default) the underlying IP allocation is also
+            released after disassociation. When ``False`` only the disassociation
+            (or detach) step is performed, leaving the allocation reserved for
+            reuse.  Providers that do not differentiate between the two steps can
+            safely ignore this flag.
+        """
         raise ProviderFeatureNotSupported(self.cloud_name, "release_floating_ip")
 
     # --- Cost Methods ---
     def get_cost(self, **kwargs) -> Any | None:
         """Calculates the cost for a VM configuration."""
         raise ProviderFeatureNotSupported(self.cloud_name, "get_cost")
+
+    # ---------------------------------------------------------------------
+    # Compatibility shim – older callers may still invoke ``list``.
+    # Placed after all type‑hinted methods to avoid shadowing the built‑in
+    # ``list`` type during class creation.
+    # ---------------------------------------------------------------------
+    def list(self, **kwargs) -> List[dict[str, Any]]:
+        """Compatibility shim – delegates to ``list_instances``.
+
+        Keeping this method ensures that legacy code and the compliance test
+        suite (which expects a ``list`` attribute) continue to work without
+        re‑introducing the original shadowing bug, because the method is defined
+        after all other type‑hinted methods.
+        """
+        return self.list_instances(**kwargs)

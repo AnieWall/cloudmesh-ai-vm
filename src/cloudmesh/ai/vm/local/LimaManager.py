@@ -170,7 +170,7 @@ class Provider(LocalBaseManager):
     # ---------------------------------------------------------------------
     # Inventory methods
     # ---------------------------------------------------------------------
-    def list_instances(self) -> List[Dict[str, Any]]:
+    def list_instances(self) -> List[dict[str, Any]]:
         """List Lima VMs using ``limactl list``.
 
         Parses the tabular output into a list of dictionaries with ``name``,
@@ -187,7 +187,7 @@ class Provider(LocalBaseManager):
         name_idx = header.index("NAME") if "NAME" in header else 0
         status_idx = header.index("STATUS") if "STATUS" in header else 1
         image_idx = header.index("IMAGE") if "IMAGE" in header else 2
-        vms: List[Dict[str, Any]] = []
+        vms: List[dict[str, Any]] = []
         for line in lines[1:]:
             parts = line.strip().split()
             if len(parts) < 3:
@@ -217,17 +217,17 @@ class Provider(LocalBaseManager):
     # ---------------------------------------------------------------------
     # Simple getter shims required by the test suite
     # ---------------------------------------------------------------------
-    def get_flavors(self, **kwargs) -> List[Dict[str, Any]]:
+    def get_flavors(self, **kwargs) -> List[dict[str, Any]]:
         """Return a minimal list of hardware profiles for Lima.
         """
         return [{"name": "default"}]
 
-    def get_keys(self) -> List[Dict[str, Any]]:
+    def get_keys(self) -> List[dict[str, Any]]:
         """Return a list of SSH key descriptors for Lima.
         """
         return [{"name": "lima-ssh-key"}]
 
-    def get_security_groups(self) -> List[Dict[str, Any]]:
+    def get_security_groups(self) -> List[dict[str, Any]]:
         """Return a placeholder security‑group list for Lima.
         """
         return [{"name": "default"}]
@@ -270,11 +270,6 @@ class Provider(LocalBaseManager):
         )
         return False
 
-    # ---------------------------------------------------------------------
-    # Compatibility shim – older tests may still call ``list``.
-    # ---------------------------------------------------------------------
-    def list(self, **kwargs) -> List[Dict[str, Any]]:
-        return self.list_instances(**kwargs)
 
 
 # Compatibility alias for matrix tests and external imports.

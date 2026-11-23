@@ -117,7 +117,7 @@ class CloudBaseManager(BaseVMProvider, ABC):
         """Deletes a VM."""
         return super().delete(name)
 
-    def list_instances(self) -> list[dict[str, Any]]:
+    def list_instances(self) -> List[dict[str, Any]]:
         """Lists all VMs managed by this provider.
 
         Delegates to the base ``BaseVMProvider.list_instances`` implementation.

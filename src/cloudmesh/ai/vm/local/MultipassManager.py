@@ -400,7 +400,7 @@ class Provider(LocalBaseManager):
         )
         return False
 
-    def get_keys(self) -> list[dict[str, Any]]:
+    def get_keys(self) -> List[dict[str, Any]]:
         """Lists available hardware profiles for Multipass.
 
         The provider does not manage SSH keys directly; this method returns a
@@ -410,7 +410,7 @@ class Provider(LocalBaseManager):
             {"name": "default-key", "path": "~/.ssh/id_rsa"},
         ]
 
-    def get_flavors(self) -> list[dict[str, Any]]:
+    def get_flavors(self, **kwargs) -> List[dict[str, Any]]:
         """Returns a minimal list of instance flavors for Multipass.
 
         The actual Multipass CLI does not expose predefined flavors, but the
@@ -419,7 +419,7 @@ class Provider(LocalBaseManager):
         """
         return [{"name": "default", "cpu": 1, "ram": "1GiB", "disk": "5GiB"}]
 
-    def get_security_groups(self) -> list[dict[str, Any]]:
+    def get_security_groups(self) -> List[dict[str, Any]]:
         """Placeholder security‑group list for Multipass.
 
         Multipass does not implement security groups.  For compatibility with
@@ -428,7 +428,7 @@ class Provider(LocalBaseManager):
         """
         return [{"name": "default", "description": "Default security group"}]
 
-    def list_instances(self) -> list[dict[str, Any]]:
+    def list_instances(self) -> List[dict[str, Any]]:
         """Lists all Multipass VMs using the JSON output format.
 
         The ``multipass list --format json`` command returns a JSON structure
@@ -442,7 +442,7 @@ class Provider(LocalBaseManager):
 
             result = self._run_command([self.CLI, "list", "--format", "json"], stream=False)
             data = json.loads(result.stdout)
-            vms: list[dict[str, Any]] = []
+            vms: List[dict[str, Any]] = []
             for item in data.get("list", []):
                 vms.append(
                     {
@@ -545,7 +545,7 @@ class Provider(LocalBaseManager):
         except Exception as e:
             raise VMProviderError(f"Error getting info for VM {name}: {e}")
 
-    def get_images(self, **kwargs) -> builtins.list[dict[str, Any]]:
+    def get_images(self, **kwargs) -> List[dict[str, Any]]:
         """Lists available Multipass images using 'multipass find --format json'."""
         try:
             import json
@@ -695,13 +695,6 @@ class Provider(LocalBaseManager):
             logger.error(f"Error deleting key from {vm_name}: {e}")
             return False
 
-    def get_keys(self) -> builtins.list[dict[str, Any]]:
-        """Multipass manages its own keys internally."""
-        return [{"name": "multipass-default-key", "path": "~/.ssh/multipass_rsa"}]
-
-    def get_security_groups(self) -> builtins.list[dict[str, Any]]:
-        """Multipass uses host networking/firewall."""
-        return [{"name": "default", "description": "Host network access"}]
 
     def run_command(self, name: str, cmd: str) -> str:
         """

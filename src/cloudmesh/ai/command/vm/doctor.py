@@ -15,6 +15,14 @@ from cloudmesh.ai.vm.exceptions import ProviderFeatureNotSupported
 import json
 import os
 from pathlib import Path
+import re
+from packaging.version import parse as parse_version
+import importlib.metadata as importlib_metadata
+
+# Local provider classes used for version checks
+from cloudmesh.ai.vm.local.Wsl2Manager import Provider as Wsl2Provider
+from cloudmesh.ai.vm.local.LimaManager import Provider as LimaProvider
+from cloudmesh.ai.vm.local.MultipassManager import Provider as MultipassProvider
 
 
 def _format_validation_result(result):
@@ -144,11 +152,11 @@ def doctor(
         rows.append(
             [
                 "Configuration File",
-                _status_label("FAIL"),
+                _status_label("WARN"),
                 details,
             ]
         )
-        failures += 1
+        warnings += 1
 
     # 1c. Tool version information
     try:
@@ -163,6 +171,89 @@ def doctor(
             version,
         ]
     )
+
+    # -------------------------------------------------------------------
+    # 1d. Minimum version checks for essential local tools
+    # -------------------------------------------------------------------
+    # Define the minimal acceptable versions (as of today, 2026‑11‑23).
+    MIN_VERSIONS = {
+        "WSL2": "3.0.5",
+        "Lima": "2.3.0",
+        "Multipass": "1.17.2",
+        "Libcloud": "3.9.1",
+    }
+
+    def _extract_version(text: str) -> str:
+        """Extract the first ``X.Y.Z`` style version from a string.
+
+        If no version number is found the original text is returned unchanged.
+        """
+        match = re.search(r"\d+(?:\.\d+)+", text)
+        return match.group(0) if match else text
+
+    # Helper that records a check result and updates counters.
+    def _record_version_check(name: str, installed_raw: str) -> None:
+        """Compare *installed_raw* against the required minimum and add a row.
+
+        ``installed_raw`` may be a full string (e.g. ``"Multipass 1.17.2"``) – the
+        actual version number is extracted before comparison.
+        """
+        nonlocal failures, warnings
+        min_version = MIN_VERSIONS.get(name)
+        installed_version = _extract_version(installed_raw)
+        if installed_version.lower() == "unknown" or installed_version == "":
+            status = "SKIP"
+            details = f"{name} not installed or version unknown"
+        else:
+            try:
+                if parse_version(installed_version) >= parse_version(min_version):
+                    status = "PASS"
+                    details = f"{name} version {installed_version} meets minimum {min_version}"
+                else:
+                    status = "FAIL"
+                    details = f"{name} version {installed_version} is older than required {min_version}"
+            except Exception:
+                status = "FAIL"
+                details = f"Unable to parse version for {name}: {installed_version}"
+        rows.append([f"{name} Version", _status_label(status), details])
+        if status == "FAIL":
+            failures += 1
+        elif status == "WARN":
+            warnings += 1
+
+    # --- WSL2 version ---------------------------------------------------
+    try:
+        wsl_provider = Wsl2Provider({}, console=console)
+        wsl_versions = wsl_provider.version
+        wsl_version_str = wsl_versions[0] if wsl_versions else "Unknown"
+    except Exception:
+        wsl_version_str = "Unknown"
+    _record_version_check("WSL2", wsl_version_str)
+
+    # --- Lima (limactl) version ----------------------------------------
+    try:
+        lima_provider = LimaProvider({})
+        lima_versions = lima_provider.version
+        lima_version_str = lima_versions[0] if lima_versions else "Unknown"
+    except Exception:
+        lima_version_str = "Unknown"
+    _record_version_check("Lima", lima_version_str)
+
+    # --- Multipass version ---------------------------------------------
+    try:
+        multipass_provider = MultipassProvider({})
+        multipass_versions = multipass_provider.version
+        multipass_version_str = multipass_versions[0] if multipass_versions else "Unknown"
+    except Exception:
+        multipass_version_str = "Unknown"
+    _record_version_check("Multipass", multipass_version_str)
+
+    # --- Libcloud version -----------------------------------------------
+    try:
+        libcloud_version_raw = importlib_metadata.version("apache-libcloud")
+    except Exception:
+        libcloud_version_raw = "Unknown"
+    _record_version_check("Libcloud", libcloud_version_raw)
 
     # 2. Check provider requirements
     if hasattr(provider, "check_requirements"):
