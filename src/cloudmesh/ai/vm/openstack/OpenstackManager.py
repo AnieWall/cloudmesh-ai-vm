@@ -627,7 +627,7 @@ class OpenstackManager(CloudBaseManager):
             logger.error(f"SDK delete failed for {name}: {e}")
             raise VMProviderError(f"SDK delete failed for {name}: {e}") from e
 
-    def list_instances(self) -> builtins.list[dict[str, Any]]:
+    def list_instances(self) -> List[dict[str, Any]]:
         """Lists all OpenStack VMs with their reachable IP addresses using the SDK.
 
         Replaces the former ``list()`` method name. A compatibility shim ``list``
@@ -675,18 +675,6 @@ class OpenstackManager(CloudBaseManager):
             logger.error(f"SDK list failed: {e}")
             return []
 
-    # ---------------------------------------------------------------------
-    # Compatibility shim – older code and tests may still call ``list``.
-    # ---------------------------------------------------------------------
-    def list(self) -> builtins.list[dict[str, Any]]:
-        """Return the list of VMs using the legacy ``list`` name.
-
-        The provider now implements ``list_instances`` as the canonical method.
-        This shim simply forwards the call to maintain backward compatibility
-        with existing test suites and downstream code that still expects a
-        ``list`` method.
-        """
-        return self.list_instances()
 
 
     def info(self, name: str | None = None, kind: str = "vm") -> dict[str, Any]:
@@ -793,7 +781,7 @@ class OpenstackManager(CloudBaseManager):
             logger.error(f"SDK restart failed for {name}: {e}")
             return False
 
-    def get_images(self, **kwargs) -> builtins.list[dict[str, Any]]:
+    def get_images(self, **kwargs) -> List[dict[str, Any]]:
         """
         Lists available images in OpenStack.
         """
@@ -812,7 +800,7 @@ class OpenstackManager(CloudBaseManager):
             logger.error(f"Error getting images: {e}")
             return []
 
-    def get_flavors(self, **kwargs) -> builtins.list[dict[str, Any]]:
+    def get_flavors(self, **kwargs) -> List[dict[str, Any]]:
         """
         Lists available flavors in OpenStack.
         """
@@ -835,7 +823,7 @@ class OpenstackManager(CloudBaseManager):
             return []
             return []
 
-    def get_keys(self) -> builtins.list[dict[str, Any]]:
+    def get_keys(self) -> List[dict[str, Any]]:
         """
         Lists available keys in OpenStack using the SDK.
         """
@@ -849,7 +837,7 @@ class OpenstackManager(CloudBaseManager):
             logger.error(f"Error listing OpenStack keys: {e}")
             return []
 
-    def get_security_groups(self) -> builtins.list[dict[str, Any]]:
+    def get_security_groups(self) -> List[dict[str, Any]]:
         """
         Lists available security groups in OpenStack using the SDK.
         """
@@ -991,7 +979,7 @@ class OpenstackManager(CloudBaseManager):
             logger.error(f"Error removing security group rule {rule_id}: {e}")
             return False
 
-    def list_security_group_rules(self, sg_name: str) -> builtins.list[dict[str, Any]]:
+    def list_security_group_rules(self, sg_name: str) -> List[dict[str, Any]]:
         """Lists rules for a group."""
         try:
             conn = self._get_sdk_conn()
@@ -1017,7 +1005,7 @@ class OpenstackManager(CloudBaseManager):
             return []
 
     @property
-    def version(self) -> builtins.list[str]:
+    def version(self) -> List[str]:
         """
         Returns a list of version strings for the OpenStack SDK and, if relevant,
         the CHI library (used by the Chameleon provider). The OpenStack manager
@@ -1369,7 +1357,7 @@ class OpenstackManager(CloudBaseManager):
             logger.error(f"Unexpected error assigning floating IP to {name}: {e}")
             return None
 
-    def release_floating_ip(self, name: str) -> bool:
+    def release_floating_ip(self, name: str, release_allocation: bool = True) -> bool:
         """
         Releases the floating IP associated with the VM.
         """

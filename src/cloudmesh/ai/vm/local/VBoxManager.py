@@ -73,7 +73,7 @@ class Provider(LocalBaseManager):
         except Exception as e:
             raise VMProviderError(f"Failed to delete VirtualBox VM {name}: {e}")
 
-    def list_instances(self) -> list[dict[str, Any]]:
+    def list_instances(self) -> List[dict[str, Any]]:
         """Lists VirtualBox VMs.
 
         The method parses the output of ``VBoxManage list vms`` which follows the
@@ -141,15 +141,15 @@ class Provider(LocalBaseManager):
         except Exception as e:
             raise VMProviderError(f"Error restarting VM {name}: {e}")
 
-    def get_flavors(self, **kwargs) -> list[dict[str, Any]]:
+    def get_flavors(self, **kwargs) -> List[dict[str, Any]]:
         """VirtualBox resources are configured per VM."""
         return [{"name": "default", "description": "Customizable in VBoxManage modifyvm"}]
 
-    def get_keys(self) -> list[dict[str, Any]]:
+    def get_keys(self) -> List[dict[str, Any]]:
         """VirtualBox doesn't manage SSH keys."""
         return [{"name": "local-key", "path": "~/.ssh/id_rsa"}]
 
-    def get_security_groups(self) -> list[dict[str, Any]]:
+    def get_security_groups(self) -> List[dict[str, Any]]:
         """VirtualBox uses Networking Modes (NAT, Bridged, etc.)"""
         return [{"name": "NAT", "description": "Default VirtualBox NAT network"}]
 

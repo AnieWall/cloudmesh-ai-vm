@@ -85,7 +85,7 @@ class Provider(LibcloudManager):
             logger.error(f"Error assigning floating IP to {name} in Google: {e}")
             raise VMProviderError(f"Failed to assign floating IP to {name}: {e}")
 
-    def release_floating_ip(self, name: str) -> bool:
+    def release_floating_ip(self, name: str, release_allocation: bool = True) -> bool:
         """
         Releases the floating (static external) IP from the Google VM.
         """

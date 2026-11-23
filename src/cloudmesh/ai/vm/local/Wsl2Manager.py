@@ -135,7 +135,7 @@ class Provider(LocalBaseManager):
         except Exception as e:
             raise VMProviderError(f"Failed to delete WSL2 distribution {name}: {e}")
 
-    def list_instances(self) -> builtins.list[dict[str, Any]]:
+    def list_instances(self) -> List[dict[str, Any]]:
         """Lists WSL2 distributions.
 
         Replaces the historic ``list()`` name. A compatibility shim is added
@@ -206,19 +206,19 @@ class Provider(LocalBaseManager):
         except Exception:
             return False
 
-    def get_flavors(self, **kwargs) -> builtins.list[dict[str, Any]]:
+    def get_flavors(self, **kwargs) -> List[dict[str, Any]]:
         """
         WSL2 does not have 'flavors' in the cloud sense.
         """
         return [{"name": "standard", "description": "Default WSL2 Resource allocation"}]
 
-    def get_keys(self) -> builtins.list[dict[str, Any]]:
+    def get_keys(self) -> List[dict[str, Any]]:
         """
         WSL2 uses local user keys.
         """
         return [{"name": "local-user-key", "path": "~/.ssh/id_rsa"}]
 
-    def get_security_groups(self) -> builtins.list[dict[str, Any]]:
+    def get_security_groups(self) -> List[dict[str, Any]]:
         """
         WSL2 uses host firewall/networking.
         """
@@ -327,7 +327,7 @@ class Provider(LocalBaseManager):
         raise VMResourceError(f"Distribution {name} not found in list")
 
     @property
-    def version(self) -> list[str]:
+    def version(self) -> List[str]:
         """
         Returns a list of version strings for the WSL tool.
         """

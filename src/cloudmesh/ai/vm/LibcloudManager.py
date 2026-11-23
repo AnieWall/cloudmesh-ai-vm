@@ -1,4 +1,4 @@
-import builtins
+# Removed builtins import; using typing.List for type hints.
 import logging
 from abc import ABC, abstractmethod
 from typing import Any, List, Dict
@@ -262,7 +262,7 @@ class LibcloudManager(CloudBaseManager, ABC):
             logger.error(f"Error deleting VM {name} in {self.cloud_name}: {e}")
             return False
 
-    def list_instances(self) -> builtins.list[dict[str, Any]]:
+    def list_instances(self) -> List[dict[str, Any]]:
         """Lists all VMs using libcloud.
 
         This replaces the older ``list()`` method. A compatibility shim ``list``
@@ -305,7 +305,7 @@ class LibcloudManager(CloudBaseManager, ABC):
             logger.error(f"Error getting info for VM {name} in {self.cloud_name}: {e}")
             return {"error": str(e)}
 
-    def get_images(self, **kwargs) -> builtins.list[dict[str, Any]]:
+    def get_images(self, **kwargs) -> List[dict[str, Any]]:
         try:
             images = self.driver.list_images()
             return [{"id": i.id, "name": i.name} for i in images]
@@ -313,7 +313,7 @@ class LibcloudManager(CloudBaseManager, ABC):
             logger.error(f"Error getting images for {self.cloud_name}: {e}")
             return []
 
-    def get_flavors(self, **kwargs) -> builtins.list[dict[str, Any]]:
+    def get_flavors(self, **kwargs) -> List[dict[str, Any]]:
         try:
             sizes = self.driver.list_sizes()
             return [
@@ -329,7 +329,7 @@ class LibcloudManager(CloudBaseManager, ABC):
             logger.error(f"Error getting flavors for {self.cloud_name}: {e}")
             return []
 
-    def list_regions(self) -> builtins.list[dict[str, Any]]:
+    def list_regions(self) -> List[dict[str, Any]]:
         """
         Lists available regions for the libcloud provider.
         """
@@ -346,7 +346,7 @@ class LibcloudManager(CloudBaseManager, ABC):
             logger.error(f"Error listing regions for {self.cloud_name}: {e}")
             return []
 
-    def get_keys(self) -> builtins.list[dict[str, Any]]:
+    def get_keys(self) -> List[dict[str, Any]]:
         try:
             if hasattr(self.driver, "list_keys"):
                 keys = self.driver.list_keys()
@@ -439,7 +439,7 @@ class LibcloudManager(CloudBaseManager, ABC):
             logger.error(f"Error adding rule to {sg_name} in {self.cloud_name}: {e}")
             return f"Error: {e}"
 
-    def get_security_groups(self) -> builtins.list[dict[str, Any]]:
+    def get_security_groups(self) -> List[dict[str, Any]]:
         try:
             if hasattr(self.driver, "list_securitygroups"):
                 groups = self.driver.list_securitygroups()
@@ -505,7 +505,7 @@ class LibcloudManager(CloudBaseManager, ABC):
             )
             return None
 
-    def release_floating_ip(self, name: str) -> bool:
+    def release_floating_ip(self, name: str, release_allocation: bool = True) -> bool:
         """
         Releases a floating IP from the VM using libcloud.
         """

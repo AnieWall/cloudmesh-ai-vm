@@ -316,8 +316,6 @@ class Provider(LibcloudManager):
         in the test suite.  This method now respects the flag while preserving
         the existing validation and ownership‑check logic.
         """
-        # The ``release_allocation`` flag is now a public argument; the original
-        # comment about a signature mismatch is no longer applicable.
         node = self._find_node(name)
         if node is None:
             return False

@@ -335,7 +335,7 @@ class Provider(LibcloudManager):
                 f"Failed to assign floating IP to {name}: {safe_msg}"
             ) from exc
 
-    def release_floating_ip(self, name: str) -> bool:
+    def release_floating_ip(self, name: str, release_allocation: bool = True) -> bool:
         """Safely detach and release a Cloudmesh-managed Azure public IP."""
         try:
             node, nic = self._get_vm_nic(name)

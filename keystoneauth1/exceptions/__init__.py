@@ -1,0 +1,1 @@
+# Stub ``keystoneauth1.exceptions`` package.

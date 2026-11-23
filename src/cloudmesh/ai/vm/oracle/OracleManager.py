@@ -215,8 +215,13 @@ class Provider(CloudBaseManager):
                 logger.error(f"Hard reset failed during stop for {name}: {stop_e}")
             return False
 
-    def list(self) -> list[dict[str, Any]]:
-        """Lists all Oracle VMs."""
+    def list_instances(self) -> List[Dict[str, Any]]:
+        """Lists all Oracle VMs.
+
+        The original ``list`` method has been renamed to ``list_instances`` to
+        avoid shadowing the built‑in ``list`` type and to align with the
+        ``BaseVMProvider`` interface.
+        """
         if not self.compute_client:
             return []
         try:
@@ -375,7 +380,7 @@ class Provider(CloudBaseManager):
             logger.error(f"OCI delete_key failed for {key_name}: {e}")
             return False
 
-    def list_regions(self) -> list[dict[str, Any]]:
+    def list_regions(self) -> List[dict[str, Any]]:
         """
         Lists available regions for Oracle Cloud.
         """
